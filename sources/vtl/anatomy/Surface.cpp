@@ -51,6 +51,8 @@ Surface::Surface()
   edgeTested = NULL;
   edgeIntersected = NULL;
   edgeIntersection = NULL;
+  triangleStamp = NULL;
+  currentTriangleStamp = 0;
 
   creaseAngle_deg = STANDARD_CREASE_ANGLE_DEGREE;
   init(0, 0);
@@ -75,6 +77,8 @@ Surface::Surface(int ribs, int ribPoints)
   edgeTested = NULL;
   edgeIntersected = NULL;
   edgeIntersection = NULL;
+  triangleStamp = NULL;
+  currentTriangleStamp = 0;
 
   creaseAngle_deg = STANDARD_CREASE_ANGLE_DEGREE;
   init(ribs, ribPoints);
@@ -104,6 +108,7 @@ void Surface::clear()
   if (edgeTested != NULL)       { delete [] edgeTested;       edgeTested       = NULL; }
   if (edgeIntersected != NULL)  { delete [] edgeIntersected;  edgeIntersected  = NULL; }
   if (edgeIntersection != NULL) { delete [] edgeIntersection; edgeIntersection = NULL; }
+  if (triangleStamp != NULL)    { delete [] triangleStamp;    triangleStamp    = NULL; }
 
   numRibs      = 0;
   numRibPoints = 0;
@@ -156,6 +161,8 @@ void Surface::init(int ribs, int ribPoints)
   edgeTested       = new unsigned char[numEdges]();
   edgeIntersected  = new unsigned char[numEdges]();
   edgeIntersection = new Point2D[numEdges];   // Point2D() defaults to (0,0)
+  triangleStamp    = new unsigned int[numTriangles]();
+  currentTriangleStamp = 0;
 
   // Jedem Punkt den Index seiner Rippe und des Rippenpunktes zuweisen.
 
@@ -752,13 +759,11 @@ void Surface::prepareIntersections()
   
 bool Surface::getTriangleList(int *indexList, int &numEntries, int MAX_ENTRIES)
 {
-  int i;
   double x, y;
   int tileX, tileY;         // Index of the current tile
   double nextBorderX, nextBorderY;
   double deltaX, deltaY;
   Tile *t = NULL;
-  int *source;
 
   Point2D Q = linePoint;
   Point2D v = lineVector;
@@ -793,10 +798,7 @@ bool Surface::getTriangleList(int *indexList, int &numEntries, int MAX_ENTRIES)
         if ((tileY >= 0) && (tileY < numTilesY))
         {
           t = &tile[tileX][tileY];
-          if (numEntries + t->numTriangles > MAX_ENTRIES) { return false; }
-          source = &t->triangle[0];
-          for (i=t->numTriangles-1; i >= 0; i--) { *indexList++ = *source++; }
-          numEntries+= t->numTriangles;
+          if (!appendTileTrianglesUnique(t, indexList, numEntries, MAX_ENTRIES)) { return false; }
         }
 
         if (y + deltaY > nextBorderY)
@@ -807,10 +809,7 @@ bool Surface::getTriangleList(int *indexList, int &numEntries, int MAX_ENTRIES)
           if ((tileY >= 0) && (tileY < numTilesY))
           {
             t = &tile[tileX][tileY];
-            if (numEntries + t->numTriangles > MAX_ENTRIES) { return false; }
-            source = &t->triangle[0];
-            for (i=t->numTriangles-1; i >= 0; i--) { *indexList++ = *source++; }
-            numEntries+= t->numTriangles;
+            if (!appendTileTrianglesUnique(t, indexList, numEntries, MAX_ENTRIES)) { return false; }
           }
         }
 
@@ -829,10 +828,7 @@ bool Surface::getTriangleList(int *indexList, int &numEntries, int MAX_ENTRIES)
         if ((tileY >= 0) && (tileY < numTilesY))
         {
           t = &tile[tileX][tileY];
-          if (numEntries + t->numTriangles > MAX_ENTRIES) { return false; }
-          source = &t->triangle[0];
-          for (i=t->numTriangles-1; i >= 0; i--) { *indexList++ = *source++; }
-          numEntries+= t->numTriangles;
+          if (!appendTileTrianglesUnique(t, indexList, numEntries, MAX_ENTRIES)) { return false; }
         }
 
         if (y + deltaY < nextBorderY)
@@ -843,10 +839,7 @@ bool Surface::getTriangleList(int *indexList, int &numEntries, int MAX_ENTRIES)
 
           if ((tileY >= 0) && (tileY < numTilesY))
           {
-            if (numEntries + t->numTriangles > MAX_ENTRIES) { return false; }
-            source = &t->triangle[0];
-            for (i=t->numTriangles-1; i >= 0; i--) { *indexList++ = *source++; }
-            numEntries+= t->numTriangles;
+            if (!appendTileTrianglesUnique(t, indexList, numEntries, MAX_ENTRIES)) { return false; }
           }
         }
 
@@ -883,10 +876,7 @@ bool Surface::getTriangleList(int *indexList, int &numEntries, int MAX_ENTRIES)
         if ((tileX >= 0) && (tileX < numTilesX))
         {
           t = &tile[tileX][tileY];
-          if (numEntries + t->numTriangles > MAX_ENTRIES) { return false; }
-          source = &t->triangle[0];
-          for (i=t->numTriangles-1; i >= 0; i--) { *indexList++ = *source++; }
-          numEntries+= t->numTriangles;
+          if (!appendTileTrianglesUnique(t, indexList, numEntries, MAX_ENTRIES)) { return false; }
         }
 
         if (x + deltaX > nextBorderX)
@@ -897,10 +887,7 @@ bool Surface::getTriangleList(int *indexList, int &numEntries, int MAX_ENTRIES)
           if ((tileX >= 0) && (tileX < numTilesX))
           {
             t = &tile[tileX][tileY];
-            if (numEntries + t->numTriangles > MAX_ENTRIES) { return false; }
-            source = &t->triangle[0];
-            for (i=t->numTriangles-1; i >= 0; i--) { *indexList++ = *source++; }
-            numEntries+= t->numTriangles;
+            if (!appendTileTrianglesUnique(t, indexList, numEntries, MAX_ENTRIES)) { return false; }
           }
         }
 
@@ -919,10 +906,7 @@ bool Surface::getTriangleList(int *indexList, int &numEntries, int MAX_ENTRIES)
         if ((tileX >= 0) && (tileX < numTilesX))
         {
           t = &tile[tileX][tileY];
-          if (numEntries + t->numTriangles > MAX_ENTRIES) { return false; }
-          source = &t->triangle[0];
-          for (i=t->numTriangles-1; i >= 0; i--) { *indexList++ = *source++; }
-          numEntries+= t->numTriangles;
+          if (!appendTileTrianglesUnique(t, indexList, numEntries, MAX_ENTRIES)) { return false; }
         }
 
         if (x + deltaX < nextBorderX)
@@ -933,10 +917,7 @@ bool Surface::getTriangleList(int *indexList, int &numEntries, int MAX_ENTRIES)
           if ((tileX >= 0) && (tileX < numTilesX))
           {
             t = &tile[tileX][tileY];
-            if (numEntries + t->numTriangles > MAX_ENTRIES) { return false; }
-            source = &t->triangle[0];
-            for (i=t->numTriangles-1; i >= 0; i--) { *indexList++ = *source++; }
-            numEntries+= t->numTriangles;
+            if (!appendTileTrianglesUnique(t, indexList, numEntries, MAX_ENTRIES)) { return false; }
           }
         }
 
@@ -967,6 +948,15 @@ void Surface::prepareIntersection(Point2D Q, Point2D v)
   // struct, which is the whole point of hoisting these out of Vertex/Edge.
   if (numVertices > 0) memset(vertexTested, 0, numVertices);
   if (numEdges > 0)    memset(edgeTested,   0, numEdges);
+
+  // Bump the per-triangle dedup stamp. On the (essentially impossible)
+  // wraparound, reset the stamp array so stale stamps don't alias.
+  ++currentTriangleStamp;
+  if (currentTriangleStamp == 0)
+  {
+    if (numTriangles > 0) memset(triangleStamp, 0, numTriangles * sizeof(unsigned int));
+    currentTriangleStamp = 1;
+  }
 
   v.normalize();            // Normalisierung ist wichtig !
   lineVector = v;           // F�r getTriangleIntersection merken

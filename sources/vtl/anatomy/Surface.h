@@ -140,6 +140,13 @@ public:
   unsigned char *edgeIntersected;  ///< 0/1 — does this edge cross the current intersecting plane?
   Point2D       *edgeIntersection; ///< Projection of the intersection point onto the intersecting plane.
 
+  // Per-triangle dedup stamp. Triangles that span multiple tiles appear in
+  // getTriangleList() multiple times; the caller can use isTriangleNew() to
+  // skip the second-and-later occurrences of each triangle within a single
+  // intersection call. Stamp is incremented in prepareIntersection().
+  unsigned int *triangleStamp;
+  unsigned int  currentTriangleStamp;
+
   // Information about the tiles ************************************
 
   Tile tile[MAX_TILES_X][MAX_TILES_Y];    ///< 2D array of tiles
@@ -234,6 +241,17 @@ public:
   void appendToFile(std::ofstream &file);
   void readFromFile(std::ifstream &file, bool initialize);
 
+  // True if this triangle has not yet been processed in the current
+  // intersection call; sets the stamp so the next call returns false.
+  // Used by getCrossProfiles to skip duplicates from triangles that span
+  // multiple tiles in getTriangleList()'s output.
+  inline bool isTriangleNew(int idx)
+  {
+    if (triangleStamp[idx] == currentTriangleStamp) { return false; }
+    triangleStamp[idx] = currentTriangleStamp;
+    return true;
+  }
+
   // **************************************************************************
   // Private functions and data.
   // **************************************************************************
@@ -246,6 +264,25 @@ private:
 
   void quickSort(int firstIndex, int lastIndex);
   bool getEdgeIntersection(int edgeIndex);
+
+  // Append the triangles of one tile to the output list, skipping any that
+  // were already added in this intersection call (triangles that span more
+  // than one tile would otherwise appear multiple times). Returns false if
+  // the worst case wouldn't fit in MAX_ENTRIES.
+  inline bool appendTileTrianglesUnique(const Tile *t, int *&out, int &count, int MAX_ENTRIES)
+  {
+    if (count + t->numTriangles > MAX_ENTRIES) { return false; }
+    const int n = t->numTriangles;
+    for (int j = 0; j < n; j++)
+    {
+      const int idx = t->triangle[j];
+      if (triangleStamp[idx] == currentTriangleStamp) { continue; }
+      triangleStamp[idx] = currentTriangleStamp;
+      *out++ = idx;
+      count++;
+    }
+    return true;
+  }
 
   // Classify vertex v against the two offset cutting lines and store the
   // -1/0/+1 side in vertexSide[v]. Lazy: short-circuits on cached results

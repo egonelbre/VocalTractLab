@@ -6192,9 +6192,9 @@ void VocalTract::getCrossProfiles(Point2D P, Point2D v, double *upperProfile,
       {
         if (s->getTriangleIntersection(indexList[i], P0, P1, n))
         {
-          if (n.y >= 0.0) 
-          { 
-            insertLowerProfileLine(P0, P1, TONGUE, tongueProfile, tongueProfileSurface); 
+          if (n.y >= 0.0)
+          {
+            insertLowerProfileLine(P0, P1, TONGUE, tongueProfile, tongueProfileSurface);
           }
         }
       }
