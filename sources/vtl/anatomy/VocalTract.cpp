@@ -5716,8 +5716,7 @@ void VocalTract::getCrossProfiles(Point2D P, Point2D v, double *upperProfile,
   Point2D Q, P0, P1, n;
   Point2D lowestTeethPoint;
   int left, right;
-  int localIndex, globalIndex;
-  bool rightOrientation;
+  int globalIndex;
 
   // Global surface indices for all pixels in the upper and lower
   // profiles, i.e., which model surfaces made the points in the
@@ -5745,18 +5744,6 @@ void VocalTract::getCrossProfiles(Point2D P, Point2D v, double *upperProfile,
     RADIATION
   };
 
-  const int MAX_CUTS = 2048;
-  
-  struct Cut
-  {
-    Point2D P0, P1, n;
-    int globalSurfaceIndex;
-    int localSurfaceIndex;
-  };
-  
-  Cut cut[MAX_CUTS];
-  int numCuts;
-
   // For the fast intersection method:
 
   const int MAX_LIST_ENTRIES = 2048; // 1024 would be too small!
@@ -5767,8 +5754,8 @@ void VocalTract::getCrossProfiles(Point2D P, Point2D v, double *upperProfile,
   // Initialize all profile values.
   // ****************************************************************
 
-  for (i=0; i < NUM_PROFILE_SAMPLES; i++) 
-  { 
+  for (i=0; i < NUM_PROFILE_SAMPLES; i++)
+  {
     upperProfile[i] = EXTREME_PROFILE_VALUE;
     lowerProfile[i] = -EXTREME_PROFILE_VALUE;
     upperProfileSurface[i] = -1;
@@ -5779,78 +5766,10 @@ void VocalTract::getCrossProfiles(Point2D P, Point2D v, double *upperProfile,
   // Cut all surfaces except the tongue and, if considerTongue == false,
   // except the uvula and epiglottis. The uvuala and epiglottis sur-
   // faces are formed after the tongue, so they are not valid yet.
-  // ****************************************************************
-
-  numCuts = 0;
-  for (k=0; k < NUM_PROFILE_SURFACES; k++)
-  {
-    globalIndex = profileSurfaceIndex[k];
-
-    if ((considerTongue) || ((considerTongue == false) && 
-        (globalIndex != UVULA) && (globalIndex != EPIGLOTTIS)))
-    {
-      s = &surfaces[globalIndex];
-
-      // The fast intersection method.
-
-      if (makeFasterIntersections) 
-      {
-        if (intersectionsPrepared[globalIndex] == false)
-        {
-          // Assign all triangles to the tiles (only once !)
-          s->prepareIntersections();
-          intersectionsPrepared[globalIndex] = true;
-        }
-
-        s->prepareIntersection(P, v);
-        if (s->getTriangleList(indexList, numListEntries, MAX_LIST_ENTRIES) == false)
-        {
-          printf("ERROR in VocalTract::getCrossProfiles(): Triangle list is too small.\n");
-        }
-
-        for (i=0; i < numListEntries; i++)
-        {
-          if ((s->getTriangleIntersection(indexList[i], P0, P1, n)) && (numCuts < MAX_CUTS) &&
-              (P0.y < MAX_PROFILE_VALUE) && (P1.y < MAX_PROFILE_VALUE) &&
-              (P0.y > MIN_PROFILE_VALUE) && (P1.y > MIN_PROFILE_VALUE))
-          {
-            cut[numCuts].P0 = P0;
-            cut[numCuts].P1 = P1;
-            cut[numCuts].n = n;
-            cut[numCuts].globalSurfaceIndex = globalIndex;
-            cut[numCuts].localSurfaceIndex = k;
-            numCuts++;
-          }
-        }
-      }
-      else
-
-      // The "normal", slower intersection method.
-
-      {
-        s->prepareIntersection(P, v);
-
-        for (i=0; i < s->numTriangles; i++)
-        {
-          if ((s->getTriangleIntersection(i, P0, P1, n)) && (numCuts < MAX_CUTS) &&
-              (P0.y < MAX_PROFILE_VALUE) && (P1.y < MAX_PROFILE_VALUE) &&
-              (P0.y > MIN_PROFILE_VALUE) && (P1.y > MIN_PROFILE_VALUE))
-          {
-            cut[numCuts].P0 = P0;
-            cut[numCuts].P1 = P1;
-            cut[numCuts].n = n;
-            cut[numCuts].globalSurfaceIndex = globalIndex;
-            cut[numCuts].localSurfaceIndex = k;
-            numCuts++;
-          }
-        }
-      }
-
-    }
-  }
-
-  // ****************************************************************
-  // Dertermine how the teeth and lips were cut!
+  //
+  // The teeth/lip min/max stats and the dispatch to insert*ProfileLine
+  // are done inline in this loop, so each triangle's intersection
+  // result (P0, P1, n) is consumed while it's still hot in registers.
   // ****************************************************************
 
   double upperTeethMinY = EXTREME_PROFILE_VALUE;
@@ -5864,42 +5783,129 @@ void VocalTract::getCrossProfiles(Point2D P, Point2D v, double *upperProfile,
   bool bothTeethCut;        // Were both lips cut ?
   bool bothLipsCut;         // Were both teeth cut ?
 
-  for (i=0; i < numCuts; i++)
+  // Pre-compute the "rightOrientation" gate for LEFT_COVER / RADIATION
+  // since it depends only on the cutting plane normal v, not the triangle.
+  const bool rightOrientation = !((v.x < 0.0) && (v.y < 0.0));
+
+  for (k=0; k < NUM_PROFILE_SURFACES; k++)
   {
-    P0 = cut[i].P0;
-    P1 = cut[i].P1;
-    globalIndex = cut[i].globalSurfaceIndex;
+    globalIndex = profileSurfaceIndex[k];
 
-    // Teeth data
-    if (globalIndex == UPPER_TEETH)
+    if ((!considerTongue) && ((globalIndex == UVULA) || (globalIndex == EPIGLOTTIS)))
     {
-      if (P0.y < upperTeethMinY) { upperTeethMinY = P0.y; }
-      if (P1.y < upperTeethMinY) { upperTeethMinY = P1.y; }
-      if (P0.y > upperTeethMaxY) { upperTeethMaxY = P0.y; }
-      if (P1.y > upperTeethMaxY) { upperTeethMaxY = P1.y; }
-      if (P0.x < upperTeethMinX) { upperTeethMinX = P0.x; }
-      if (P1.x < upperTeethMinX) { upperTeethMinX = P1.x; }
-    }
-    if (globalIndex == LOWER_TEETH)
-    {
-      if (P0.y > lowerTeethMaxY) { lowerTeethMaxY = P0.y; }
-      if (P1.y > lowerTeethMaxY) { lowerTeethMaxY = P1.y; }
-      if (P0.y < lowerTeethMinY) { lowerTeethMinY = P0.y; }
-      if (P1.y < lowerTeethMinY) { lowerTeethMinY = P1.y; }
-      if (P0.x < lowerTeethMinX) { lowerTeethMinX = P0.x; }
-      if (P1.x < lowerTeethMinX) { lowerTeethMinX = P1.x; }
+      continue;
     }
 
-    // Lip data
-    if (globalIndex == UPPER_LIP)
+    s = &surfaces[globalIndex];
+
+    int triCount;
+    bool useIndexList;
+
+    if (makeFasterIntersections)
     {
-      if (P0.y < upperLipMinY) { upperLipMinY = P0.y; }
-      if (P1.y < upperLipMinY) { upperLipMinY = P1.y; }
+      if (intersectionsPrepared[globalIndex] == false)
+      {
+        // Assign all triangles to the tiles (only once !)
+        s->prepareIntersections();
+        intersectionsPrepared[globalIndex] = true;
+      }
+
+      s->prepareIntersection(P, v);
+      if (s->getTriangleList(indexList, numListEntries, MAX_LIST_ENTRIES) == false)
+      {
+        printf("ERROR in VocalTract::getCrossProfiles(): Triangle list is too small.\n");
+      }
+      triCount = numListEntries;
+      useIndexList = true;
     }
-    if (globalIndex == LOWER_LIP)
+    else
     {
-      if (P0.y > lowerLipMaxY) { lowerLipMaxY = P0.y; }
-      if (P1.y > lowerLipMaxY) { lowerLipMaxY = P1.y; }
+      s->prepareIntersection(P, v);
+      triCount = s->numTriangles;
+      useIndexList = false;
+    }
+
+    for (i = 0; i < triCount; i++)
+    {
+      const int triIdx = useIndexList ? indexList[i] : i;
+      if (!s->getTriangleIntersection(triIdx, P0, P1, n)) { continue; }
+      if ((P0.y >= MAX_PROFILE_VALUE) || (P1.y >= MAX_PROFILE_VALUE)) { continue; }
+      if ((P0.y <= MIN_PROFILE_VALUE) || (P1.y <= MIN_PROFILE_VALUE)) { continue; }
+
+      // Per-surface action: update teeth/lip stats and dispatch the insert.
+      // globalIndex is loop-invariant for this inner loop, so the dispatch
+      // collapses to one branch after the compiler hoists.
+      switch (globalIndex)
+      {
+        case UPPER_COVER:
+          if (n.y < 0.0) { insertUpperProfileLine(P0, P1, globalIndex, upperProfile, upperProfileSurface); }
+          break;
+
+        case UPPER_TEETH:
+          if (P0.y < upperTeethMinY) { upperTeethMinY = P0.y; }
+          if (P1.y < upperTeethMinY) { upperTeethMinY = P1.y; }
+          if (P0.y > upperTeethMaxY) { upperTeethMaxY = P0.y; }
+          if (P1.y > upperTeethMaxY) { upperTeethMaxY = P1.y; }
+          if (P0.x < upperTeethMinX) { upperTeethMinX = P0.x; }
+          if (P1.x < upperTeethMinX) { upperTeethMinX = P1.x; }
+          if (n.y < 0.0) { insertUpperProfileLine(P0, P1, globalIndex, upperProfile, upperProfileSurface); }
+          break;
+
+        case UPPER_LIP:
+          if (P0.y < upperLipMinY) { upperLipMinY = P0.y; }
+          if (P1.y < upperLipMinY) { upperLipMinY = P1.y; }
+          if (n.y < 0.0) { insertUpperProfileLine(P0, P1, globalIndex, upperProfile, upperProfileSurface); }
+          break;
+
+        case UVULA:
+          if (n.y < 0.0) { insertUpperProfileLine(P0, P1, globalIndex, upperProfile, upperProfileSurface); }
+          break;
+
+        case LOWER_COVER:
+          if (n.y > 0.0)
+          {
+            insertLowerCoverProfileLine(P0, P1, globalIndex, upperProfile,
+              upperProfileSurface, lowerProfile, lowerProfileSurface);
+          }
+          break;
+
+        case LOWER_TEETH:
+          if (P0.y > lowerTeethMaxY) { lowerTeethMaxY = P0.y; }
+          if (P1.y > lowerTeethMaxY) { lowerTeethMaxY = P1.y; }
+          if (P0.y < lowerTeethMinY) { lowerTeethMinY = P0.y; }
+          if (P1.y < lowerTeethMinY) { lowerTeethMinY = P1.y; }
+          if (P0.x < lowerTeethMinX) { lowerTeethMinX = P0.x; }
+          if (P1.x < lowerTeethMinX) { lowerTeethMinX = P1.x; }
+          if (n.y > 0.0) { insertLowerProfileLine(P0, P1, globalIndex, lowerProfile, lowerProfileSurface); }
+          break;
+
+        case LOWER_LIP:
+          if (P0.y > lowerLipMaxY) { lowerLipMaxY = P0.y; }
+          if (P1.y > lowerLipMaxY) { lowerLipMaxY = P1.y; }
+          if (n.y > 0.0) { insertLowerProfileLine(P0, P1, globalIndex, lowerProfile, lowerProfileSurface); }
+          break;
+
+        case EPIGLOTTIS:
+          if (n.y > 0.0) { insertLowerProfileLine(P0, P1, globalIndex, lowerProfile, lowerProfileSurface); }
+          break;
+
+        default:
+          // LEFT_COVER and RADIATION can contribute to either the upper or
+          // lower profile depending on the surface normal, but only in the
+          // oral and upper-pharyngeal part (gated by rightOrientation).
+          if ((n.x*n.x + n.y*n.y > MIN_SQUARED_NORMAL_LENGTH) && rightOrientation)
+          {
+            if (n.y <= 0.0)
+            {
+              insertUpperProfileLine(P0, P1, globalIndex, upperProfile, upperProfileSurface);
+            }
+            else if (n.y >= 0.0)
+            {
+              insertLowerProfileLine(P0, P1, globalIndex, lowerProfile, lowerProfileSurface);
+            }
+          }
+          break;
+      }
     }
   }
 
@@ -5924,114 +5930,9 @@ void VocalTract::getCrossProfiles(Point2D P, Point2D v, double *upperProfile,
   }
 
   // ****************************************************************
-  // Create the upper and lower profile.
+  // (The upper and lower profiles are now built inline in the surface
+  //  iteration loop above, while the triangle data is still hot.)
   // ****************************************************************
-
-  for (i=0; i < numCuts; i++)
-  {
-    P0 = cut[i].P0;
-    P1 = cut[i].P1;
-    n = cut[i].n;
-    localIndex = cut[i].localSurfaceIndex;
-    globalIndex = cut[i].globalSurfaceIndex;
-
-    // **************************************************************
-    // Surfaces that contribute to the upper profile.
-    // **************************************************************
-
-    if (globalIndex == UPPER_COVER)
-    {
-      if (n.y < 0.0) { insertUpperProfileLine(P0, P1, globalIndex, upperProfile, upperProfileSurface); }
-    }
-    else
-    
-    if (globalIndex == UPPER_TEETH)
-    {
-      if (n.y < 0.0) { insertUpperProfileLine(P0, P1, globalIndex, upperProfile, upperProfileSurface); }
-    }
-    else
-
-    if (globalIndex == UPPER_LIP)
-    {
-      if (n.y < 0.0) { insertUpperProfileLine(P0, P1, globalIndex, upperProfile, upperProfileSurface); }
-    }
-    else
-
-    if (globalIndex == UVULA)
-    {
-      if (n.y < 0.0) { insertUpperProfileLine(P0, P1, globalIndex, upperProfile, upperProfileSurface); }
-    }
-    else
-
-    // **************************************************************
-    // Surfaces that contribute to the lower profile.
-    // **************************************************************
-
-    if (globalIndex == LOWER_COVER)
-    {
-      // The lower cover is special - it may also supplement
-      // the upper profile.
-      if (n.y > 0.0) 
-      { 
-        insertLowerCoverProfileLine(P0, P1, globalIndex, upperProfile, 
-          upperProfileSurface, lowerProfile, lowerProfileSurface); 
-      }
-    }
-    else
-
-    if (globalIndex == LOWER_TEETH)
-    {
-      if (n.y > 0.0) { insertLowerProfileLine(P0, P1, globalIndex, lowerProfile, lowerProfileSurface); }
-    }
-    else
-
-    if (globalIndex == LOWER_LIP)
-    {
-      if (n.y > 0.0) { insertLowerProfileLine(P0, P1, globalIndex, lowerProfile, lowerProfileSurface); }
-    }
-    else
-
-    if (globalIndex == EPIGLOTTIS)
-    {
-      if (n.y > 0.0) { insertLowerProfileLine(P0, P1, globalIndex, lowerProfile, lowerProfileSurface); }
-    }
-    else
-
-    // **************************************************************
-    // All other surfaces (LEFT_COVER and RADIATION) can contribute 
-    // to either the upper or the lower profile, depending on the 
-    // surface normal.
-    // And only if the surface normal is long enough (> epsilon).
-    // **************************************************************
-
-    {
-      rightOrientation = true;
-
-      // Consider these surfaces only in the oral and upper pharyngeal
-      // part of the vocal tract, because it may cause sporadic errors 
-      // in the lower pharyngeal part.
-      // Therefore, the normal vector v of the cutting line must not
-      // point into the bottom left (posterior) quadrant.
-
-      if ((v.x < 0.0) && (v.y < 0.0))
-      {
-        rightOrientation = false;
-      }
-
-      if ((n.x*n.x + n.y*n.y > MIN_SQUARED_NORMAL_LENGTH) && (rightOrientation))
-      {
-        if (n.y <= 0.0)
-        {
-          insertUpperProfileLine(P0, P1, globalIndex, upperProfile, upperProfileSurface);
-        }
-        else
-        if (n.y >= 0.0)
-        {
-          insertLowerProfileLine(P0, P1, globalIndex, lowerProfile, lowerProfileSurface);
-        }
-      }
-    }
-  }
 
   // ****************************************************************
   // Mark invalid profile values as such.
