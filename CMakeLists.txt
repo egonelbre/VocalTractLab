@@ -311,3 +311,44 @@ if(VTL_BUILD_BENCHMARKS)
     "${CMAKE_CURRENT_BINARY_DIR}/benchmarks"
   )
 endif()
+
+# --- Tests ------------------------------------------------------------------
+# Hash-based regression tests for the synthesis pipeline. Each subtest
+# exercises one of the heavily-optimized code paths (geometry,
+# transfer function, end-to-end audio) and compares an FNV-1a hash of the
+# raw output bytes against a baked-in baseline. The synthesizer is
+# deterministic, so any drift is a real behavior change.
+#
+#   cmake --build --preset mac-release --target audio_regression_test
+#   ctest --test-dir build/mac-release --output-on-failure
+#
+# To re-baseline after an intentional change, edit
+# tests/audio_regression_test.cpp and zero out the expected hashes; the
+# test will print actual values in capture mode.
+
+option(VTL_BUILD_TESTS "Build the synthesis regression tests" ON)
+
+if(VTL_BUILD_TESTS)
+  enable_testing()
+
+  configure_file(
+    tests/test_data.h.in
+    "${CMAKE_CURRENT_BINARY_DIR}/tests/test_data.h"
+    @ONLY
+  )
+
+  add_executable(audio_regression_test
+    tests/audio_regression_test.cpp
+    $<TARGET_OBJECTS:VocalTractLabApiObj>
+  )
+  set_target_properties(audio_regression_test PROPERTIES
+    INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
+  )
+  target_link_libraries(audio_regression_test PRIVATE VocalTractLabApiObj)
+  target_include_directories(audio_regression_test PRIVATE
+    sources/vtl/api
+    "${CMAKE_CURRENT_BINARY_DIR}/tests"
+  )
+
+  add_test(NAME audio_regression COMMAND audio_regression_test)
+endif()

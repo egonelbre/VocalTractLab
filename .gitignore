@@ -18,3 +18,6 @@ compile_commands.json
 # Prebuilt Windows binaries (kept out of the source tree)
 *.exe
 *.dll
+
+# Diagnostic dump from the audio regression test on hash mismatch
+audio_regression_actual.raw

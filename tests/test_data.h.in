@@ -1,0 +1,8 @@
+#pragma once
+
+namespace vtl_test {
+
+constexpr const char* kSpeakerFile = "@CMAKE_CURRENT_SOURCE_DIR@/data/speakers/JD2.speaker";
+constexpr const char* kGesturalScoreFile = "@CMAKE_CURRENT_SOURCE_DIR@/data/example01.ges";
+
+}  // namespace vtl_test
