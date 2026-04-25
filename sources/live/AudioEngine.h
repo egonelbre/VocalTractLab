@@ -87,8 +87,18 @@ class AudioEngine {
   // The audio thread has its own VocalTract instance.
   VocalTract* uiTract() { return uiVocalTract; }
 
+  // Synchronous pump for environments that cannot spawn a thread (web/WASM).
+  // Generates audio chunks until the OpenAL queue is full or maxChunks have
+  // been produced. Native builds rely on the synthesis thread instead and
+  // do not call this.
+  void pumpMainThread(int maxChunks = 8);
+
  private:
   void threadMain();
+  // Returns true if it was able to (un)queue a buffer slot and produce one
+  // chunk; false if the OpenAL queue is full and no buffer has been
+  // processed yet.
+  bool produceOneChunk();
 
   std::atomic<bool> running{false};
   std::thread thread;

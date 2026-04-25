@@ -33,6 +33,11 @@
 
 #include <GLFW/glfw3.h>
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#include <emscripten/html5.h>
+#endif
+
 namespace {
 
 // ---- Asset discovery ------------------------------------------------------
@@ -812,62 +817,30 @@ void glfwErrorCallback(int code, const char* msg) {
 
 }  // namespace
 
-int main(int argc, char** argv) {
-  std::filesystem::path speakerPath =
-      findSpeakerFile(argc > 0 ? argv[0] : "vtl_live");
-  if (speakerPath.empty()) {
-    std::fprintf(stderr,
-                 "live: could not locate JD2.speaker next to the binary\n");
-    return 1;
-  }
+// File-scope app state so emscripten_set_main_loop() can find it from a
+// plain function pointer.
+namespace {
+struct LabApp {
+  GLFWwindow* window = nullptr;
+  live::AudioEngine* engine = nullptr;
+  ComplexSignal* fftBuf = nullptr;
+};
+LabApp g_app;
+}  // namespace
 
-  glfwSetErrorCallback(glfwErrorCallback);
-  if (!glfwInit()) return 1;
+static void frameTick() {
+  GLFWwindow* window = g_app.window;
+  live::AudioEngine& engine = *g_app.engine;
+  ComplexSignal& fftBuf = *g_app.fftBuf;
 
-#if defined(__APPLE__)
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  const char* glslVersion = "#version 150";
-#else
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-  const char* glslVersion = "#version 130";
+#if defined(__EMSCRIPTEN__)
+  // No background audio thread — keep the OpenAL queue topped up here.
+  // 8 chunks × 10 ms = 80 ms of headroom, plenty for a 60 fps main loop
+  // even when the browser stalls a frame.
+  engine.pumpMainThread(8);
 #endif
 
-  GLFWwindow* window =
-      glfwCreateWindow(1280, 800, "VocalTractLab Live", nullptr, nullptr);
-  if (!window) {
-    glfwTerminate();
-    return 1;
-  }
-  glfwMakeContextCurrent(window);
-  glfwSwapInterval(1);
-
-  IMGUI_CHECKVERSION();
-  ImGui::CreateContext();
-  ImGuiIO& io = ImGui::GetIO();
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-  ImGui::StyleColorsLight();
-  ImGui_ImplGlfw_InitForOpenGL(window, true);
-  ImGui_ImplOpenGL3_Init(glslVersion);
-
-  live::AudioEngine engine;
-  if (!engine.start(speakerPath.string())) {
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-    glfwDestroyWindow(window);
-    glfwTerminate();
-    return 1;
-  }
-
-  // FFT scratch space, reused each frame.
-  ComplexSignal fftBuf(FFT_LEN);
-
-  while (!glfwWindowShouldClose(window)) {
+  {
     glfwPollEvents();
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -1176,6 +1149,88 @@ int main(int argc, char** argv) {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     glfwSwapBuffers(window);
   }
+}
+
+int main(int argc, char** argv) {
+#if defined(__EMSCRIPTEN__)
+  // emscripten preloads files into a virtual filesystem at the path passed
+  // through --preload-file. The CMake target maps the speaker file to "/".
+  std::filesystem::path speakerPath = "/JD2.speaker";
+#else
+  std::filesystem::path speakerPath =
+      findSpeakerFile(argc > 0 ? argv[0] : "vtl_live");
+  if (speakerPath.empty()) {
+    std::fprintf(stderr,
+                 "live: could not locate JD2.speaker next to the binary\n");
+    return 1;
+  }
+#endif
+
+  glfwSetErrorCallback(glfwErrorCallback);
+  if (!glfwInit()) return 1;
+
+#if defined(__EMSCRIPTEN__)
+  // WebGL2 maps to GLES 3.0 in browsers; ImGui's opengl3 backend supports
+  // both desktop GL and GLES, the GLSL preamble just has to match.
+  glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  const char* glslVersion = "#version 300 es";
+#elif defined(__APPLE__)
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  const char* glslVersion = "#version 150";
+#else
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  const char* glslVersion = "#version 130";
+#endif
+
+  GLFWwindow* window =
+      glfwCreateWindow(1280, 800, "VocalTractLab Live", nullptr, nullptr);
+  if (!window) {
+    glfwTerminate();
+    return 1;
+  }
+  glfwMakeContextCurrent(window);
+  glfwSwapInterval(1);
+
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  ImGui::StyleColorsLight();
+  ImGui_ImplGlfw_InitForOpenGL(window, true);
+  ImGui_ImplOpenGL3_Init(glslVersion);
+
+  static live::AudioEngine engine;
+  if (!engine.start(speakerPath.string())) {
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return 1;
+  }
+
+  static ComplexSignal fftBuf(FFT_LEN);
+
+  g_app.window = window;
+  g_app.engine = &engine;
+  g_app.fftBuf = &fftBuf;
+
+#if defined(__EMSCRIPTEN__)
+  // emscripten owns the event loop in the browser; this returns and the
+  // page keeps spinning frameTick at the browser's rAF cadence.
+  emscripten_set_main_loop(frameTick, 0, 1);
+  return 0;
+#else
+  while (!glfwWindowShouldClose(window)) {
+    frameTick();
+  }
 
   engine.stop();
 
@@ -1185,4 +1240,5 @@ int main(int argc, char** argv) {
   glfwDestroyWindow(window);
   glfwTerminate();
   return 0;
+#endif
 }

@@ -44,6 +44,16 @@
       "architecture": "x64",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" },
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "wasm",
+      "description": "Build the live build as a static webpage with Emscripten. Requires emsdk on PATH (or EMSDK env). Native targets (wxWidgets GUI, benchmarks, tests, shared API library) are skipped automatically.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
@@ -51,6 +61,7 @@
     { "name": "mac-release", "configurePreset": "mac-release" },
     { "name": "linux-debug", "configurePreset": "linux-debug" },
     { "name": "win-debug",   "configurePreset": "win-debug" },
-    { "name": "win-release", "configurePreset": "win-release" }
+    { "name": "win-release", "configurePreset": "win-release" },
+    { "name": "wasm",        "configurePreset": "wasm", "targets": ["vtl_live"] }
   ]
 }

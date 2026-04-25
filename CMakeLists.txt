@@ -49,10 +49,18 @@ endif()
 
 # --- Dependencies -----------------------------------------------------------
 
-find_package(wxWidgets REQUIRED COMPONENTS core base gl adv)
-include(${wxWidgets_USE_FILE})
+# wxWidgets is only used by the legacy GUI; skip it when building for the
+# browser (Emscripten), where the wx GUI cannot run anyway.
+if(NOT EMSCRIPTEN)
+  find_package(wxWidgets REQUIRED COMPONENTS core base gl adv)
+  include(${wxWidgets_USE_FILE})
+endif()
 
-if(NOT WIN32)
+if(EMSCRIPTEN)
+  # Emscripten ships its own OpenAL implementation backed by Web Audio. We
+  # don't go through find_package; instead we just pass `-lopenal` to the
+  # link line of any target that needs it.
+elseif(NOT WIN32)
   find_package(OpenAL CONFIG REQUIRED)
 endif()
 
@@ -149,6 +157,9 @@ endif()
 
 # --- Target -----------------------------------------------------------------
 
+# wxWidgets-based GUI: native only. The browser build skips this entire
+# block because wxWidgets has no Emscripten port.
+if(NOT EMSCRIPTEN)
 add_executable(VocalTractLab2 WIN32 MACOSX_BUNDLE ${ALL_SOURCES})
 
 set_target_properties(VocalTractLab2 PROPERTIES
@@ -237,6 +248,7 @@ else()
     VERBATIM
   )
 endif()
+endif()  # NOT EMSCRIPTEN — end of wxWidgets GUI block
 
 # --- VocalTractLabApi shared library ----------------------------------------
 #
@@ -264,22 +276,30 @@ if(WIN32)
     _CRT_SECURE_NO_WARNINGS
   )
   target_link_libraries(VocalTractLabApiObj PUBLIC winmm)
+elseif(EMSCRIPTEN)
+  # Emscripten's OpenAL port is a single linker flag away.
+  target_compile_definitions(VocalTractLabApiObj PUBLIC HAVE_OPENAL)
+  target_link_options(VocalTractLabApiObj PUBLIC "SHELL:-lopenal")
 else()
   target_compile_definitions(VocalTractLabApiObj PUBLIC HAVE_OPENAL)
   target_link_libraries(VocalTractLabApiObj PUBLIC OpenAL::OpenAL)
 endif()
 
-set(API_SHARED_SOURCES "")
-if(WIN32)
-  list(APPEND API_SHARED_SOURCES sources/vtl/api/VocalTractLabApi.def)
+# The C API shared library is consumed by the MATLAB / Python examples and
+# cannot be a meaningful artifact in the browser; skip it on Emscripten.
+if(NOT EMSCRIPTEN)
+  set(API_SHARED_SOURCES "")
+  if(WIN32)
+    list(APPEND API_SHARED_SOURCES sources/vtl/api/VocalTractLabApi.def)
+  endif()
+
+  add_library(VocalTractLabApi SHARED ${API_SHARED_SOURCES} $<TARGET_OBJECTS:VocalTractLabApiObj>)
+  target_link_libraries(VocalTractLabApi PRIVATE VocalTractLabApiObj)
+
+  set_target_properties(VocalTractLabApi PROPERTIES
+    INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
+  )
 endif()
-
-add_library(VocalTractLabApi SHARED ${API_SHARED_SOURCES} $<TARGET_OBJECTS:VocalTractLabApiObj>)
-target_link_libraries(VocalTractLabApi PRIVATE VocalTractLabApiObj)
-
-set_target_properties(VocalTractLabApi PROPERTIES
-  INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
-)
 
 # --- Live (ImGui realtime experimentation app) -------------------------------
 # Lightweight cross-platform app that drives the synthesizer in realtime,
@@ -297,58 +317,116 @@ if(WIN32)
 endif()
 
 if(VTL_BUILD_LIVE)
-  find_package(glfw3 CONFIG REQUIRED)
-  find_package(imgui CONFIG REQUIRED)
-  find_package(OpenGL REQUIRED)
-
   set(LIVE_SOURCES
     sources/live/main.cpp
     sources/live/AudioEngine.cpp
   )
 
-  add_executable(vtl_live MACOSX_BUNDLE
-    ${LIVE_SOURCES}
-    $<TARGET_OBJECTS:VocalTractLabApiObj>
-  )
-  set_target_properties(vtl_live PROPERTIES
-    INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
-  )
-  target_include_directories(vtl_live PRIVATE
-    sources
-    sources/vtl
-    sources/live
-  )
-  target_link_libraries(vtl_live PRIVATE
-    VocalTractLabApiObj
-    glfw
-    imgui::imgui
-    OpenGL::GL
-  )
-  if(APPLE)
-    set_target_properties(vtl_live PROPERTIES
-      MACOSX_BUNDLE_BUNDLE_NAME          "VocalTractLab2 Live"
-      MACOSX_BUNDLE_GUI_IDENTIFIER       "de.vocaltractlab.VocalTractLab2.Live"
-      MACOSX_BUNDLE_BUNDLE_VERSION       "${PROJECT_VERSION}"
-      MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+  if(EMSCRIPTEN)
+    # ---- WASM/browser build -----------------------------------------------
+    # Emscripten ships GLFW, OpenAL, and WebGL2 as built-in ports; we only
+    # need to fetch ImGui ourselves. We grab the docking branch directly so
+    # the live build keeps the same dock-builder layout it has on native.
+    include(FetchContent)
+    FetchContent_Declare(imgui_src
+      GIT_REPOSITORY https://github.com/ocornut/imgui.git
+      GIT_TAG v1.92.7-docking
     )
-    set(LIVE_BUNDLE_RESOURCE_FILES "")
-    foreach(REL ${RUNTIME_DATA_FILES})
-      list(APPEND LIVE_BUNDLE_RESOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/${REL}")
-    endforeach()
-    target_sources(vtl_live PRIVATE ${LIVE_BUNDLE_RESOURCE_FILES})
-    set_source_files_properties(${LIVE_BUNDLE_RESOURCE_FILES} PROPERTIES
-      MACOSX_PACKAGE_LOCATION "Resources"
+    FetchContent_MakeAvailable(imgui_src)
+
+    add_library(imgui_static STATIC
+      ${imgui_src_SOURCE_DIR}/imgui.cpp
+      ${imgui_src_SOURCE_DIR}/imgui_demo.cpp
+      ${imgui_src_SOURCE_DIR}/imgui_draw.cpp
+      ${imgui_src_SOURCE_DIR}/imgui_tables.cpp
+      ${imgui_src_SOURCE_DIR}/imgui_widgets.cpp
+      ${imgui_src_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+      ${imgui_src_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
     )
+    target_include_directories(imgui_static PUBLIC
+      ${imgui_src_SOURCE_DIR}
+      ${imgui_src_SOURCE_DIR}/backends
+    )
+    # Emscripten ports flags only matter at link time; passing -sUSE_GLFW=3
+    # at compile time just warns. The header (GLFW/glfw3.h) is on the
+    # include path unconditionally.
+
+    add_executable(vtl_live ${LIVE_SOURCES} $<TARGET_OBJECTS:VocalTractLabApiObj>)
+    target_include_directories(vtl_live PRIVATE
+      sources
+      sources/vtl
+      sources/live
+    )
+    target_link_libraries(vtl_live PRIVATE
+      VocalTractLabApiObj
+      imgui_static
+    )
+    target_link_options(vtl_live PRIVATE
+      "SHELL:-sUSE_GLFW=3"
+      "SHELL:-sUSE_WEBGL2=1"
+      "SHELL:-sFULL_ES3=1"
+      "SHELL:-sMIN_WEBGL_VERSION=2"
+      "SHELL:-sMAX_WEBGL_VERSION=2"
+      "SHELL:-sALLOW_MEMORY_GROWTH=1"
+      "SHELL:-sINITIAL_MEMORY=64MB"
+      "SHELL:-sSTACK_SIZE=2MB"
+      "SHELL:-sEXIT_RUNTIME=0"
+      "SHELL:-lopenal"
+      "SHELL:-lidbfs.js"
+      "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/JD2.speaker@/JD2.speaker"
+    )
+    # Emit an .html shell so the build artifact can be opened directly.
+    set_target_properties(vtl_live PROPERTIES SUFFIX ".html")
   else()
-    foreach(REL ${RUNTIME_DATA_FILES})
-      cmake_path(GET REL FILENAME BASENAME)
-      add_custom_command(TARGET vtl_live POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-          "${CMAKE_CURRENT_SOURCE_DIR}/data/${REL}"
-          "$<TARGET_FILE_DIR:vtl_live>/${BASENAME}"
-        VERBATIM
+    # ---- Native build (macOS/Linux) ---------------------------------------
+    find_package(glfw3 CONFIG REQUIRED)
+    find_package(imgui CONFIG REQUIRED)
+    find_package(OpenGL REQUIRED)
+
+    add_executable(vtl_live MACOSX_BUNDLE
+      ${LIVE_SOURCES}
+      $<TARGET_OBJECTS:VocalTractLabApiObj>
+    )
+    set_target_properties(vtl_live PROPERTIES
+      INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
+    )
+    target_include_directories(vtl_live PRIVATE
+      sources
+      sources/vtl
+      sources/live
+    )
+    target_link_libraries(vtl_live PRIVATE
+      VocalTractLabApiObj
+      glfw
+      imgui::imgui
+      OpenGL::GL
+    )
+    if(APPLE)
+      set_target_properties(vtl_live PROPERTIES
+        MACOSX_BUNDLE_BUNDLE_NAME          "VocalTractLab2 Live"
+        MACOSX_BUNDLE_GUI_IDENTIFIER       "de.vocaltractlab.VocalTractLab2.Live"
+        MACOSX_BUNDLE_BUNDLE_VERSION       "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
       )
-    endforeach()
+      set(LIVE_BUNDLE_RESOURCE_FILES "")
+      foreach(REL ${RUNTIME_DATA_FILES})
+        list(APPEND LIVE_BUNDLE_RESOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/${REL}")
+      endforeach()
+      target_sources(vtl_live PRIVATE ${LIVE_BUNDLE_RESOURCE_FILES})
+      set_source_files_properties(${LIVE_BUNDLE_RESOURCE_FILES} PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources"
+      )
+    else()
+      foreach(REL ${RUNTIME_DATA_FILES})
+        cmake_path(GET REL FILENAME BASENAME)
+        add_custom_command(TARGET vtl_live POST_BUILD
+          COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/data/${REL}"
+            "$<TARGET_FILE_DIR:vtl_live>/${BASENAME}"
+          VERBATIM
+        )
+      endforeach()
+    endif()
   endif()
 endif()
 
@@ -360,6 +438,9 @@ endif()
 #   ./build/mac-debug/synthesis_bench --benchmark_min_time=2s
 
 option(VTL_BUILD_BENCHMARKS "Build the synthesis benchmarks" ON)
+if(EMSCRIPTEN)
+  set(VTL_BUILD_BENCHMARKS OFF)
+endif()
 
 if(VTL_BUILD_BENCHMARKS)
   find_package(benchmark CONFIG REQUIRED)
@@ -407,6 +488,9 @@ endif()
 # test will print actual values in capture mode.
 
 option(VTL_BUILD_TESTS "Build the synthesis regression tests" ON)
+if(EMSCRIPTEN)
+  set(VTL_BUILD_TESTS OFF)
+endif()
 
 if(VTL_BUILD_TESTS)
   enable_testing()

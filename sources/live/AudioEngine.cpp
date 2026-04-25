@@ -245,8 +245,35 @@ bool AudioEngine::start(const std::string& speakerFile) {
   alBuffers.resize(NUM_AL_BUFFERS);
   alGenBuffers(NUM_AL_BUFFERS, alBuffers.data());
 
+  // Prime the synthesizer with one zero-length chunk: Synthesizer::addChunk
+  // captures the initial tube/glottis shapes on the first call and emits no
+  // audio. Doing it here means produceOneChunk() can assume the synthesizer
+  // is ready, regardless of whether a thread is driving it (native) or the
+  // main loop is (web).
+  {
+    std::vector<double> chunk;
+    std::vector<double> tractParamsLocal(VocalTract::NUM_PARAMS);
+    std::vector<double> glottisParamsLocal(numGlottisParams());
+    std::lock_guard<std::mutex> lk(control.mtx);
+    for (int i = 0; i < VocalTract::NUM_PARAMS; ++i) {
+      tractParamsLocal[i] = control.tractParams[i];
+    }
+    for (int i = 0; i < (int)glottisParamsLocal.size(); ++i) {
+      glottisParamsLocal[i] = control.glottisParams[i];
+    }
+    glottisParamsLocal[Glottis::FREQUENCY] = control.f0_Hz;
+    glottisParamsLocal[Glottis::PRESSURE] = control.pressure_dPa;
+    synthesizer->addChunk(glottisParamsLocal.data(), tractParamsLocal.data(),
+                          0, chunk);
+  }
+
   running.store(true);
+#if !defined(__EMSCRIPTEN__)
+  // Native: a dedicated audio thread paces synthesis to realtime, freeing
+  // the UI from doing it. On web (Emscripten) the host can't easily spawn
+  // threads — we let the main loop call pumpMainThread() instead.
   thread = std::thread(&AudioEngine::threadMain, this);
+#endif
   return true;
 }
 
@@ -286,16 +313,41 @@ void AudioEngine::stop() {
   uiVocalTract = nullptr;
 }
 
-void AudioEngine::threadMain() {
-  std::vector<double> chunk;
-  std::vector<int16_t> i16(CHUNK_SAMPLES);
-  std::vector<double> tractParamsLocal(VocalTract::NUM_PARAMS);
-  std::vector<double> glottisParamsLocal;
+// Internal state for produceOneChunk(). Lives inside AudioEngine so both the
+// thread and the main-loop pump share buffer cursors and gain caching.
+namespace {
+struct ProduceState {
+  ALuint nextBuffer = 0;
+  bool playing = false;
+  float lastGain = -1.0f;
+};
+ProduceState g_produceState;
+}  // namespace
 
-  // Queue all NUM_AL_BUFFERS up front. The first chunk after init carries
-  // no audio (Synthesizer uses it to record initial shapes), so we burn one
-  // priming call before entering the streaming loop.
-  glottisParamsLocal.resize(numGlottisParams());
+bool AudioEngine::produceOneChunk() {
+  // Quick check for a free OpenAL buffer slot. Returns false (without
+  // synthesizing) when the queue is full and the player has not yet
+  // consumed anything — the caller decides whether to sleep, yield, or
+  // bail until next tick.
+  ALint queued = 0, processed = 0;
+  alGetSourcei(alSource, AL_BUFFERS_QUEUED, &queued);
+  alGetSourcei(alSource, AL_BUFFERS_PROCESSED, &processed);
+  ALuint freedBuf = 0;
+  if (queued >= NUM_AL_BUFFERS) {
+    if (processed <= 0) return false;
+    alSourceUnqueueBuffers(alSource, 1, &freedBuf);
+  }
+
+  thread_local std::vector<double> chunk;
+  thread_local std::vector<int16_t> i16(CHUNK_SAMPLES);
+  thread_local std::vector<double> tractParamsLocal(VocalTract::NUM_PARAMS);
+  thread_local std::vector<double> glottisParamsLocal;
+  if ((int)glottisParamsLocal.size() != numGlottisParams()) {
+    glottisParamsLocal.assign(numGlottisParams(), 0.0);
+  }
+  if ((int)i16.size() != CHUNK_SAMPLES) i16.resize(CHUNK_SAMPLES);
+
+  float gain;
   {
     std::lock_guard<std::mutex> lk(control.mtx);
     for (int i = 0; i < VocalTract::NUM_PARAMS; ++i) {
@@ -306,88 +358,55 @@ void AudioEngine::threadMain() {
     }
     glottisParamsLocal[Glottis::FREQUENCY] = control.f0_Hz;
     glottisParamsLocal[Glottis::PRESSURE] = control.pressure_dPa;
+    gain = control.outputGain;
   }
-  synthesizer->addChunk(glottisParamsLocal.data(), tractParamsLocal.data(), 0,
-                        chunk);
 
-  ALuint nextBuffer = 0;  // Index into alBuffers for the next slot to fill.
-  bool playing = false;
-  float lastGain = -1.0f;
+  if (gain != g_produceState.lastGain) {
+    alSourcef(alSource, AL_GAIN, gain);
+    g_produceState.lastGain = gain;
+  }
 
+  synthesizer->addChunk(glottisParamsLocal.data(), tractParamsLocal.data(),
+                        CHUNK_SAMPLES, chunk);
+  if ((int)chunk.size() != CHUNK_SAMPLES) chunk.resize(CHUNK_SAMPLES, 0.0);
+  history.push(chunk.data(), CHUNK_SAMPLES);
+
+  for (int i = 0; i < CHUNK_SAMPLES; ++i) {
+    double s = chunk[i];
+    if (s > 1.0) s = 1.0;
+    if (s < -1.0) s = -1.0;
+    i16[i] = (int16_t)(s * 32767.0);
+  }
+
+  ALuint buf = alBuffers[g_produceState.nextBuffer];
+  g_produceState.nextBuffer =
+      (g_produceState.nextBuffer + 1) % NUM_AL_BUFFERS;
+  alBufferData(buf, AL_FORMAT_MONO16, i16.data(),
+               (ALsizei)(CHUNK_SAMPLES * sizeof(int16_t)),
+               AUDIO_SAMPLING_RATE_HZ);
+  alSourceQueueBuffers(alSource, 1, &buf);
+
+  ALint state = 0;
+  alGetSourcei(alSource, AL_SOURCE_STATE, &state);
+  if (state != AL_PLAYING) alSourcePlay(alSource);
+  g_produceState.playing = true;
+  return true;
+}
+
+void AudioEngine::threadMain() {
   while (running.load()) {
-    // Snapshot the latest control state into thread-local copies. Holding
-    // the mutex only for the copy keeps the UI thread responsive.
-    float gain;
-    {
-      std::lock_guard<std::mutex> lk(control.mtx);
-      for (int i = 0; i < VocalTract::NUM_PARAMS; ++i) {
-        tractParamsLocal[i] = control.tractParams[i];
-      }
-      for (int i = 0; i < (int)glottisParamsLocal.size(); ++i) {
-        glottisParamsLocal[i] = control.glottisParams[i];
-      }
-      glottisParamsLocal[Glottis::FREQUENCY] = control.f0_Hz;
-      glottisParamsLocal[Glottis::PRESSURE] = control.pressure_dPa;
-      gain = control.outputGain;
-    }
-
-    if (gain != lastGain) {
-      alSourcef(alSource, AL_GAIN, gain);
-      lastGain = gain;
-    }
-
-    synthesizer->addChunk(glottisParamsLocal.data(), tractParamsLocal.data(),
-                          CHUNK_SAMPLES, chunk);
-    if ((int)chunk.size() != CHUNK_SAMPLES) chunk.resize(CHUNK_SAMPLES, 0.0);
-
-    history.push(chunk.data(), CHUNK_SAMPLES);
-
-    for (int i = 0; i < CHUNK_SAMPLES; ++i) {
-      double s = chunk[i];
-      if (s > 1.0) s = 1.0;
-      if (s < -1.0) s = -1.0;
-      i16[i] = (int16_t)(s * 32767.0);
-    }
-
-    // If this slot has been played already, unqueue it before refilling.
-    ALint queued = 0;
-    alGetSourcei(alSource, AL_BUFFERS_QUEUED, &queued);
-    if (queued >= NUM_AL_BUFFERS) {
-      ALuint freedBuf = 0;
-      while (true) {
-        ALint processed = 0;
-        alGetSourcei(alSource, AL_BUFFERS_PROCESSED, &processed);
-        if (processed > 0) {
-          alSourceUnqueueBuffers(alSource, 1, &freedBuf);
-          break;
-        }
-        if (!running.load()) return;
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-      }
-    }
-
-    ALuint buf = alBuffers[nextBuffer];
-    nextBuffer = (nextBuffer + 1) % NUM_AL_BUFFERS;
-    alBufferData(buf, AL_FORMAT_MONO16, i16.data(),
-                 (ALsizei)(CHUNK_SAMPLES * sizeof(int16_t)),
-                 AUDIO_SAMPLING_RATE_HZ);
-    alSourceQueueBuffers(alSource, 1, &buf);
-
-    if (!playing) {
-      ALint state = 0;
-      alGetSourcei(alSource, AL_SOURCE_STATE, &state);
-      if (state != AL_PLAYING) alSourcePlay(alSource);
-      playing = true;
-    } else {
-      // Recover from buffer underrun: OpenAL stops the source if it runs
-      // out of queued data, even if more buffers are then queued.
-      ALint state = 0;
-      alGetSourcei(alSource, AL_SOURCE_STATE, &state);
-      if (state != AL_PLAYING) alSourcePlay(alSource);
+    if (!produceOneChunk()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
   }
-
   alSourceStop(alSource);
+}
+
+void AudioEngine::pumpMainThread(int maxChunks) {
+  if (!running.load()) return;
+  for (int i = 0; i < maxChunks; ++i) {
+    if (!produceOneChunk()) return;
+  }
 }
 
 }  // namespace live
