@@ -281,6 +281,77 @@ set_target_properties(VocalTractLabApi PROPERTIES
   INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
 )
 
+# --- Live (ImGui realtime experimentation app) -------------------------------
+# Lightweight cross-platform app that drives the synthesizer in realtime,
+# draws the vocal tract outline and the radiated spectrum with ImGui, and
+# lets the user modulate the fundamental frequency on the fly. Independent
+# of the wxWidgets GUI; depends only on glfw, imgui (with glfw+opengl3
+# bindings), OpenGL, and openal-soft.
+
+option(VTL_BUILD_LIVE "Build the ImGui realtime live app" ON)
+
+# The live build streams audio through OpenAL, which the project only wires up on
+# non-Windows targets (matching SoundLib). Skip the live build on Windows for now.
+if(WIN32)
+  set(VTL_BUILD_LIVE OFF)
+endif()
+
+if(VTL_BUILD_LIVE)
+  find_package(glfw3 CONFIG REQUIRED)
+  find_package(imgui CONFIG REQUIRED)
+  find_package(OpenGL REQUIRED)
+
+  set(LIVE_SOURCES
+    sources/live/main.cpp
+    sources/live/AudioEngine.cpp
+  )
+
+  add_executable(vtl_live MACOSX_BUNDLE
+    ${LIVE_SOURCES}
+    $<TARGET_OBJECTS:VocalTractLabApiObj>
+  )
+  set_target_properties(vtl_live PROPERTIES
+    INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
+  )
+  target_include_directories(vtl_live PRIVATE
+    sources
+    sources/vtl
+    sources/live
+  )
+  target_link_libraries(vtl_live PRIVATE
+    VocalTractLabApiObj
+    glfw
+    imgui::imgui
+    OpenGL::GL
+  )
+  if(APPLE)
+    set_target_properties(vtl_live PROPERTIES
+      MACOSX_BUNDLE_BUNDLE_NAME          "VocalTractLab2 Live"
+      MACOSX_BUNDLE_GUI_IDENTIFIER       "de.vocaltractlab.VocalTractLab2.Live"
+      MACOSX_BUNDLE_BUNDLE_VERSION       "${PROJECT_VERSION}"
+      MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+    )
+    set(LIVE_BUNDLE_RESOURCE_FILES "")
+    foreach(REL ${RUNTIME_DATA_FILES})
+      list(APPEND LIVE_BUNDLE_RESOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/${REL}")
+    endforeach()
+    target_sources(vtl_live PRIVATE ${LIVE_BUNDLE_RESOURCE_FILES})
+    set_source_files_properties(${LIVE_BUNDLE_RESOURCE_FILES} PROPERTIES
+      MACOSX_PACKAGE_LOCATION "Resources"
+    )
+  else()
+    foreach(REL ${RUNTIME_DATA_FILES})
+      cmake_path(GET REL FILENAME BASENAME)
+      add_custom_command(TARGET vtl_live POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+          "${CMAKE_CURRENT_SOURCE_DIR}/data/${REL}"
+          "$<TARGET_FILE_DIR:vtl_live>/${BASENAME}"
+        VERBATIM
+      )
+    endforeach()
+  endif()
+endif()
+
 # --- Benchmarks -------------------------------------------------------------
 # Microbenchmarks for the vtl synthesis pipeline. Use them to gauge how close
 # the backend is to real-time on a given platform / build configuration:
