@@ -71,8 +71,11 @@ public:
     int numAssociates;
     int associatedTriangle[NUM_ASSOCIATED_TRIANGLES];
     int associatedCorner[NUM_ASSOCIATED_TRIANGLES];
-    int reserved;         // Vertex position in relation to a line: -1=left, +1=right, 0=on the line
-	  bool wasTested;       // Was the vertext position in relation to an intersection line tested ?
+    // Per-intersection-call scratch state used to live here as
+    // `int reserved` and `bool wasTested`. It now lives in Surface's
+    // parallel arrays vertexSide[] / vertexTested[] so the reset is a
+    // memset and the per-edge classification reads from densely-packed
+    // memory instead of dragging in a full Vertex per check.
   };
 
   // ****************************************************************
@@ -96,9 +99,9 @@ public:
   struct Edge
   {
     int vertex[2];          ///< Indices of the two vertices.
-    bool isIntersected;     ///< Was the edge intersected by the intersecting plane?
-	  bool wasTested; 		    ///< Was the edge already tested for an intersection?
-    Point2D intersection;   ///< Projection of the intersection point on the intersecting plane.
+    // Per-intersection-call scratch state (was `wasTested`,
+    // `isIntersected`, `intersection`) is now in Surface's parallel
+    // arrays edgeTested[] / edgeIntersected[] / edgeIntersection[].
   };
 
   // ****************************************************************
@@ -127,6 +130,15 @@ public:
   Triangle *triangle; ///< Array of triangles.
   Edge *edge;         ///< Array of edges.
   int *sequence;      ///< Order, in which the triangles must be painted with the painters algorithm.
+
+  // Per-intersection-call scratch state, hoisted out of Vertex/Edge so
+  // prepareIntersection() resets are bulk memsets and the inner-loop
+  // reads stay in cache. All sized to numVertices / numEdges.
+  unsigned char *vertexTested;     ///< 0/1 — has this vertex been classified yet for the current intersection?
+  signed char   *vertexSide;       ///< -1=left of line, +1=right, 0=on the line.
+  unsigned char *edgeTested;       ///< 0/1 — has this edge been tested for intersection yet?
+  unsigned char *edgeIntersected;  ///< 0/1 — does this edge cross the current intersecting plane?
+  Point2D       *edgeIntersection; ///< Projection of the intersection point onto the intersecting plane.
 
   // Information about the tiles ************************************
 

@@ -21,6 +21,7 @@
 
 #include "anatomy/Surface.h"
 #include <cmath>
+#include <cstring>
 #include <iostream>
 #include <fstream>
 
@@ -45,6 +46,11 @@ Surface::Surface()
   triangle = NULL;
   edge     = NULL;
   sequence = NULL;
+  vertexTested = NULL;
+  vertexSide = NULL;
+  edgeTested = NULL;
+  edgeIntersected = NULL;
+  edgeIntersection = NULL;
 
   creaseAngle_deg = STANDARD_CREASE_ANGLE_DEGREE;
   init(0, 0);
@@ -64,6 +70,11 @@ Surface::Surface(int ribs, int ribPoints)
   triangle = NULL;
   edge     = NULL;
   sequence = NULL;
+  vertexTested = NULL;
+  vertexSide = NULL;
+  edgeTested = NULL;
+  edgeIntersected = NULL;
+  edgeIntersection = NULL;
 
   creaseAngle_deg = STANDARD_CREASE_ANGLE_DEGREE;
   init(ribs, ribPoints);
@@ -84,10 +95,15 @@ Surface::~Surface()
 
 void Surface::clear()
 {
-  if (vertex != NULL)   { delete [] vertex; }
-  if (triangle != NULL) { delete [] triangle; }
-  if (edge != NULL)     { delete [] edge; }
-  if (sequence != NULL) { delete [] sequence; }
+  if (vertex != NULL)   { delete [] vertex;   vertex   = NULL; }
+  if (triangle != NULL) { delete [] triangle; triangle = NULL; }
+  if (edge != NULL)     { delete [] edge;     edge     = NULL; }
+  if (sequence != NULL) { delete [] sequence; sequence = NULL; }
+  if (vertexTested != NULL)     { delete [] vertexTested;     vertexTested     = NULL; }
+  if (vertexSide != NULL)       { delete [] vertexSide;       vertexSide       = NULL; }
+  if (edgeTested != NULL)       { delete [] edgeTested;       edgeTested       = NULL; }
+  if (edgeIntersected != NULL)  { delete [] edgeIntersected;  edgeIntersected  = NULL; }
+  if (edgeIntersection != NULL) { delete [] edgeIntersection; edgeIntersection = NULL; }
 
   numRibs      = 0;
   numRibPoints = 0;
@@ -127,12 +143,19 @@ void Surface::init(int ribs, int ribPoints)
     numEdges     = 3*numRibs*numRibPoints - 2*numRibs - 2*numRibPoints + 1;
   }
 
-  // Speicher für die Oberflächenpunkte und Normalen allokieren.
+  // Speicher fï¿½r die Oberflï¿½chenpunkte und Normalen allokieren.
   
   vertex   = new Vertex[numVertices];
   triangle = new Triangle[numTriangles];
   edge     = new Edge[numEdges];
   sequence = new int[numTriangles];
+
+  // Per-intersection-call scratch arrays (zero-initialized via value-init).
+  vertexTested     = new unsigned char[numVertices]();
+  vertexSide       = new signed char[numVertices]();
+  edgeTested       = new unsigned char[numEdges]();
+  edgeIntersected  = new unsigned char[numEdges]();
+  edgeIntersection = new Point2D[numEdges];   // Point2D() defaults to (0,0)
 
   // Jedem Punkt den Index seiner Rippe und des Rippenpunktes zuweisen.
 
@@ -218,7 +241,6 @@ void Surface::init(int ribs, int ribPoints)
 
   for (i=0; i < numVertices; i++)
   {
-    vertex[i].reserved = 0;
     vertex[i].numAssociates = 0;
 
     for (j=0; j < NUM_ASSOCIATED_TRIANGLES; j++)
@@ -247,11 +269,8 @@ void Surface::init(int ribs, int ribPoints)
     sequence[i] = i;
   }
 
-  for (i=0; i < numEdges; i++)
-  {
-    edge[i].isIntersected = false;
-    edge[i].intersection.set(0.0, 0.0);
-  }
+  // edgeIntersected[] / edgeIntersection[] are zero-initialized at
+  // allocation time above; no per-edge init needed here.
 }
 
 // ****************************************************************************
@@ -307,7 +326,7 @@ void Surface::calculateNormals()
 {
   int i, j, k;
 
-  // Die Normalen aller Flächen berechnen und auf die Eckpunkte übertragen.
+  // Die Normalen aller Flï¿½chen berechnen und auf die Eckpunkte ï¿½bertragen.
 
   int p0, p1, p2;
   Point3D v0;
@@ -325,16 +344,16 @@ void Surface::calculateNormals()
     v0 = vertex[p1].coord - vertex[p0].coord;
     v1 = vertex[p2].coord - vertex[p0].coord;
 
-    // Normalenvektor der Fläche (Länge ist proportional zum Flächeninhalt)
+    // Normalenvektor der Flï¿½che (Lï¿½nge ist proportional zum Flï¿½cheninhalt)
 
     triangle[i].planeNormal = crossProduct(v0, v1);
     length = triangle[i].planeNormal.magnitude();
     triangle[i].area = 0.5*length;
 
-    // Den Flächennormalenvektor normieren.
+    // Den Flï¿½chennormalenvektor normieren.
     triangle[i].planeNormal.normalize();
 
-    // Die Eckpunktnormalen werden mit der Flächennormalen initialisiert (skaliert mit Flächeninhalt).
+    // Die Eckpunktnormalen werden mit der Flï¿½chennormalen initialisiert (skaliert mit Flï¿½cheninhalt).
     for (k=0; k < 3; k++)
     {
       triangle[i].cornerNormal[k] = triangle[i].area*triangle[i].planeNormal;
@@ -350,7 +369,7 @@ void Surface::calculateNormals()
 
   for (i=0; i < numVertices; i++)
   {
-    // Jedes Zweierpärchen von Dreiecken an diesem Punkt überprüfen.
+    // Jedes Zweierpï¿½rchen von Dreiecken an diesem Punkt ï¿½berprï¿½fen.
     for (j=0; j < vertex[i].numAssociates-1; j++)
     {
       planeNormal0 = triangle[ vertex[i].associatedTriangle[j] ].planeNormal;
@@ -365,7 +384,7 @@ void Surface::calculateNormals()
         
         if (cosAngle > cosCreaseAngle)
         {
-          // Die Flächennormalen der Flächen j und k gegenseitig auf die Punkte addieren.
+          // Die Flï¿½chennormalen der Flï¿½chen j und k gegenseitig auf die Punkte addieren.
 
           cornerNormal0 = &triangle[ vertex[i].associatedTriangle[j] ].cornerNormal[ vertex[i].associatedCorner[j] ];
           cornerNormal1 = &triangle[ vertex[i].associatedTriangle[k] ].cornerNormal[ vertex[i].associatedCorner[k] ];
@@ -377,7 +396,7 @@ void Surface::calculateNormals()
     }
   }
 
-  // Alle Eckpunktnormalen auf die Länge 1 bringen.
+  // Alle Eckpunktnormalen auf die Lï¿½nge 1 bringen.
 
   for (i=0; i < numTriangles; i++)
   {
@@ -942,22 +961,24 @@ bool Surface::getTriangleList(int *indexList, int &numEntries, int MAX_ENTRIES)
 void Surface::prepareIntersection(Point2D Q, Point2D v)
 {
   const double EPSILON = 0.000001;
-  int i;
 
-  for (i=0; i < numVertices; i++) { vertex[i].wasTested = false; }
-  for (i=0; i < numEdges; i++)    { edge[i].wasTested = false; }
+  // Bulk-clear the per-call scratch flags. Memset on a packed byte array
+  // touches numVertices/64 + numEdges/64 cache lines instead of one per
+  // struct, which is the whole point of hoisting these out of Vertex/Edge.
+  if (numVertices > 0) memset(vertexTested, 0, numVertices);
+  if (numEdges > 0)    memset(edgeTested,   0, numEdges);
 
   v.normalize();            // Normalisierung ist wichtig !
-  lineVector = v;           // Für getTriangleIntersection merken
+  lineVector = v;           // Fï¿½r getTriangleIntersection merken
   linePoint = Q;
 
-  // Einen Normaleneinheitsvektor bilden, der senkrecht (90° nach links
+  // Einen Normaleneinheitsvektor bilden, der senkrecht (90ï¿½ nach links
   // gedreht) auf v steht.
 
   Point2D n(-v.y, v.x);
 
   // Die zwei Punkte leftLinePoint und rightLinePoint berechnen, die im 
-  // Abstand EPSILON links bzw. rechts der Gerade Q+t*v auf der Höhe von
+  // Abstand EPSILON links bzw. rechts der Gerade Q+t*v auf der Hï¿½he von
   // P liegen.
 
   leftLinePoint  = Q + EPSILON*n;
@@ -988,13 +1009,13 @@ bool Surface::getTriangleIntersection(int index, Point2D &P0, Point2D &P1, Point
   int numIntersections = 0;
   Point2D Q[3];
 
-  if (getEdgeIntersection(e0)) { Q[numIntersections++] = edge[e0].intersection; }
-  if (getEdgeIntersection(e1)) { Q[numIntersections++] = edge[e1].intersection; }
-  if (getEdgeIntersection(e2)) { Q[numIntersections++] = edge[e2].intersection; }
+  if (getEdgeIntersection(e0)) { Q[numIntersections++] = edgeIntersection[e0]; }
+  if (getEdgeIntersection(e1)) { Q[numIntersections++] = edgeIntersection[e1]; }
+  if (getEdgeIntersection(e2)) { Q[numIntersections++] = edgeIntersection[e2]; }
 
   if (numIntersections < 2) { return false; }
 
-  // Den Normalenvektor der Fläche berechnen.
+  // Den Normalenvektor der Flï¿½che berechnen.
 
   int v0, v1, v2;
   v0 = triangle[index].vertex[0];
@@ -1004,14 +1025,14 @@ bool Surface::getTriangleIntersection(int index, Point2D &P0, Point2D &P1, Point
   Point3D normal = crossProduct(vertex[v1].coord - vertex[v0].coord, vertex[v2].coord - vertex[v0].coord);
 
   // ****************************************************************
-  // Die Projektion des Normalenvektors auf die Dreicksfläche
-  // Dazu muss lineVector die Länge 1 haben !
+  // Die Projektion des Normalenvektors auf die Dreicksflï¿½che
+  // Dazu muss lineVector die Lï¿½nge 1 haben !
   // ****************************************************************
 
   n.x = normal.z;
   n.y = normal.x*lineVector.x + normal.y*lineVector.y;
 
-  // Bei zwei Schnittpunkten P0 und P1 zurückgeben.
+  // Bei zwei Schnittpunkten P0 und P1 zurï¿½ckgeben.
 
   if (numIntersections == 2)
   {
@@ -1056,65 +1077,52 @@ bool Surface::getTriangleIntersection(int index, Point2D &P0, Point2D &P1, Point
 
 bool Surface::getEdgeIntersection(int edgeIndex)
 {
-  if (edge[edgeIndex].wasTested) { return edge[edgeIndex].isIntersected; }
+  if (edgeTested[edgeIndex]) { return edgeIntersected[edgeIndex]; }
 
   // The edge must be tested for an intersection.
 
   Point2D w;
   double d;
 
-  edge[edgeIndex].wasTested = true;
+  edgeTested[edgeIndex] = 1;
 
   int v0 = edge[edgeIndex].vertex[0];
   int v1 = edge[edgeIndex].vertex[1];
 
   // ****************************************************************
-  // Is the first vertex left or right from the intersection line ?
-  // Im reserved-Feld jedes Punktes vermerken, ob er links von (res = -1), 
-  // rechts von (res = +1) oder (innerhalb einer EPSILON-Umgebung) 
-  // auf der Schnittebene liegt (res = 0).
+  // Classify each endpoint vertex against the intersection line:
+  //   vertexSide[v] = -1 (left), +1 (right), 0 (on the line within EPSILON).
+  // The classification is computed lazily and cached in vertexSide[]
+  // so subsequent edges that share a vertex don't redo the work.
   // ****************************************************************
 
-  if (vertex[v0].wasTested == false)
+  for (int v : {v0, v1})
   {
-    vertex[v0].wasTested = true;
-    vertex[v0].reserved = 0;
+    if (vertexTested[v]) continue;
+    vertexTested[v] = 1;
 
-    w.x = vertex[v0].coord.x - leftLinePoint.x;
-    w.y = vertex[v0].coord.y - leftLinePoint.y;
+    int side = 0;
+
+    w.x = vertex[v].coord.x - leftLinePoint.x;
+    w.y = vertex[v].coord.y - leftLinePoint.y;
     d = w.x*lineVector.y - w.y*lineVector.x;
-    if (d < 0.0) { vertex[v0].reserved = -1; }
+    if (d < 0.0) { side = -1; }
 
-    w.x = vertex[v0].coord.x - rightLinePoint.x;
-    w.y = vertex[v0].coord.y - rightLinePoint.y;
+    w.x = vertex[v].coord.x - rightLinePoint.x;
+    w.y = vertex[v].coord.y - rightLinePoint.y;
     d = w.x*lineVector.y - w.y*lineVector.x;
-    if (d > 0.0) { vertex[v0].reserved = 1; }
-  }
+    if (d > 0.0) { side = 1; }
 
-  // Is the second vertex left or right from the intersection line ?
-
-  if (vertex[v1].wasTested == false)
-  {
-    vertex[v1].wasTested = true;
-    vertex[v1].reserved = 0;
-
-    w.x = vertex[v1].coord.x - leftLinePoint.x;
-    w.y = vertex[v1].coord.y - leftLinePoint.y;
-    d = w.x*lineVector.y - w.y*lineVector.x;
-    if (d < 0.0) { vertex[v1].reserved = -1; }
-
-    w.x = vertex[v1].coord.x - rightLinePoint.x;
-    w.y = vertex[v1].coord.y - rightLinePoint.y;
-    d = w.x*lineVector.y - w.y*lineVector.x;
-    if (d > 0.0) { vertex[v1].reserved = 1; }
+    vertexSide[v] = (signed char)side;
   }
 
   // Test the edge for an intersection.
 
-  edge[edgeIndex].isIntersected = false;
+  edgeIntersected[edgeIndex] = 0;
 
-  if (((vertex[v0].reserved >= 0) && (vertex[v1].reserved <= 0)) ||
-      ((vertex[v0].reserved <= 0) && (vertex[v1].reserved >= 0)))
+  int s0 = vertexSide[v0];
+  int s1 = vertexSide[v1];
+  if (((s0 >= 0) && (s1 <= 0)) || ((s0 <= 0) && (s1 >= 0)))
   {
     // Den Schnittpunkt der Kante mit der Schnittebene genau bestimmen.
     const double EPSILON = 0.000001;
@@ -1137,14 +1145,14 @@ bool Surface::getEdgeIntersection(int edgeIndex)
       d = (-lineVector.x*R.y + lineVector.y*R.x) / denominator;
       if ((d >= -EPSILON) && (d < 1.0+EPSILON))
       {
-        edge[edgeIndex].isIntersected = true;
-        edge[edgeIndex].intersection.x = (lineVector.x*(u.y*R.z - u.z*R.y) + lineVector.y*(u.z*R.x - u.x*R.z)) / denominator;
-        edge[edgeIndex].intersection.y = (-u.x*R.y + u.y*R.x) / denominator;
+        edgeIntersected[edgeIndex] = 1;
+        edgeIntersection[edgeIndex].x = (lineVector.x*(u.y*R.z - u.z*R.y) + lineVector.y*(u.z*R.x - u.x*R.z)) / denominator;
+        edgeIntersection[edgeIndex].y = (-u.x*R.y + u.y*R.x) / denominator;
       }
     }
   }
 
-  return edge[edgeIndex].isIntersected;
+  return edgeIntersected[edgeIndex];
 }
 
 // ****************************************************************************
