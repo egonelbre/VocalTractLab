@@ -1,0 +1,11 @@
+{
+  "name": "vocaltractlab2",
+  "version-string": "2.4",
+  "dependencies": [
+    "wxwidgets",
+    {
+      "name": "openal-soft",
+      "platform": "!windows"
+    }
+  ]
+}
