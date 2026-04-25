@@ -28,6 +28,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "imgui_internal.h"
 
 #include <GLFW/glfw3.h>
 
@@ -451,6 +452,7 @@ int main(int argc, char** argv) {
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
   ImGui::StyleColorsLight();
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init(glslVersion);
@@ -474,6 +476,31 @@ int main(int argc, char** argv) {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
+    // Full-viewport dockspace. The first frame builds a default layout
+    // (controls left, vocal tract upper-right, spectrum lower-right);
+    // subsequent runs honour whatever the user dragged the panels into,
+    // since ImGui persists dock state to imgui.ini.
+    ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(
+        0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+    static bool dockBuilt = false;
+    if (!dockBuilt) {
+      dockBuilt = true;
+      ImGui::DockBuilderRemoveNode(dockspace_id);
+      ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+      ImGui::DockBuilderSetNodeSize(dockspace_id,
+                                    ImGui::GetMainViewport()->Size);
+      ImGuiID leftId, rightId;
+      ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.32f, &leftId,
+                                  &rightId);
+      ImGuiID rightTopId, rightBottomId;
+      ImGui::DockBuilderSplitNode(rightId, ImGuiDir_Up, 0.65f, &rightTopId,
+                                  &rightBottomId);
+      ImGui::DockBuilderDockWindow("Controls", leftId);
+      ImGui::DockBuilderDockWindow("Vocal Tract", rightTopId);
+      ImGui::DockBuilderDockWindow("Primary Spectrum", rightBottomId);
+      ImGui::DockBuilderFinish(dockspace_id);
+    }
+
     // Snapshot of control state for this frame's UI; written-back at the end.
     double f0_Hz, pressure_dPa;
     float gain;
@@ -493,8 +520,6 @@ int main(int argc, char** argv) {
     }
 
     // -------- Controls --------
-    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(420, 780), ImGuiCond_FirstUseEver);
     ImGui::Begin("Controls");
 
     {
@@ -588,8 +613,6 @@ int main(int argc, char** argv) {
     ImGui::End();
 
     // -------- Vocal tract --------
-    ImGui::SetNextWindowPos(ImVec2(440, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(820, 500), ImGuiCond_FirstUseEver);
     ImGui::Begin("Vocal Tract");
     {
       // Apply current articulation to the visualization tract and rebuild.
@@ -612,8 +635,6 @@ int main(int argc, char** argv) {
     ImGui::End();
 
     // -------- Spectrum --------
-    ImGui::SetNextWindowPos(ImVec2(440, 520), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(820, 270), ImGuiCond_FirstUseEver);
     ImGui::Begin("Primary Spectrum");
     {
       ImVec2 avail = ImGui::GetContentRegionAvail();
