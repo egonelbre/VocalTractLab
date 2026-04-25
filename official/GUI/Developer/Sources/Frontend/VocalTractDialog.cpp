@@ -339,23 +339,21 @@ void VocalTractDialog::initWidgets()
     labTongueSide[i] = new wxStaticText(controlPanel, wxID_ANY, "0", wxDefaultPosition, wxSize(50, -1));
   }
 
-  label = new wxStaticText(controlPanel, wxID_ANY, "");   // A dummy label
-
   // The columns with the scroll bars are stretchable.
   gridSizer->AddGrowableCol(0, 1);
 //  gridSizer->AddGrowableCol(2, 1);
 
-  gridSizer->Add(scrTongueSide[0], 1, wxGROW); 
+  gridSizer->Add(scrTongueSide[0], 1, wxGROW);
   gridSizer->Add(labTongueSide[0]);
-  gridSizer->Add(label);
+  gridSizer->Add(new wxStaticText(controlPanel, wxID_ANY, ""));
 
-  gridSizer->Add(scrTongueSide[1], 1, wxGROW); 
+  gridSizer->Add(scrTongueSide[1], 1, wxGROW);
   gridSizer->Add(labTongueSide[1]);
-  gridSizer->Add(label);
+  gridSizer->Add(new wxStaticText(controlPanel, wxID_ANY, ""));
 
-  gridSizer->Add(scrTongueSide[2], 1, wxGROW); 
+  gridSizer->Add(scrTongueSide[2], 1, wxGROW);
   gridSizer->Add(labTongueSide[2]);
-  gridSizer->Add(label);
+  gridSizer->Add(new wxStaticText(controlPanel, wxID_ANY, ""));
 
   controlSizer->Add(gridSizer, 0, wxGROW);
 
