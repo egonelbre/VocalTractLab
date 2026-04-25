@@ -9,6 +9,25 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# --- Link-time optimization -------------------------------------------------
+# Lets the linker inline across translation units, so e.g. tiny accessors
+# defined in a .cpp file (Point2D::normalize) get inlined at the hot call
+# sites in Surface.cpp / VocalTract.cpp without us having to hand-move them
+# to a header. Enabled for everything except Debug builds.
+include(CheckIPOSupported)
+check_ipo_supported(RESULT VTL_IPO_SUPPORTED OUTPUT VTL_IPO_ERROR)
+if(VTL_IPO_SUPPORTED AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(VTL_ENABLE_IPO TRUE)
+  message(STATUS "Link-time optimization: enabled")
+else()
+  set(VTL_ENABLE_IPO FALSE)
+  if(NOT VTL_IPO_SUPPORTED)
+    message(STATUS "Link-time optimization: not supported by toolchain (${VTL_IPO_ERROR})")
+  else()
+    message(STATUS "Link-time optimization: disabled for Debug builds")
+  endif()
+endif()
+
 # --- Dependencies -----------------------------------------------------------
 
 find_package(wxWidgets REQUIRED COMPONENTS core base gl adv)
@@ -113,6 +132,10 @@ endif()
 
 add_executable(VocalTractLab2 WIN32 MACOSX_BUNDLE ${ALL_SOURCES})
 
+set_target_properties(VocalTractLab2 PROPERTIES
+  INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
+)
+
 target_include_directories(VocalTractLab2 PRIVATE
   sources
   sources/vtl
@@ -205,6 +228,10 @@ endif()
 
 add_library(VocalTractLabApi SHARED ${API_SOURCES})
 
+set_target_properties(VocalTractLabApi PROPERTIES
+  INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
+)
+
 target_include_directories(VocalTractLabApi PRIVATE
   sources
   sources/vtl
@@ -241,6 +268,9 @@ if(VTL_BUILD_BENCHMARKS)
   )
 
   add_executable(synthesis_bench benchmarks/synthesis_bench.cpp)
+  set_target_properties(synthesis_bench PROPERTIES
+    INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
+  )
   target_link_libraries(synthesis_bench PRIVATE
     VocalTractLabApi
     benchmark::benchmark
