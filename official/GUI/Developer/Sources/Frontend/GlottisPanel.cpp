@@ -176,6 +176,9 @@ void GlottisPanel::initWidgets()
   wxStaticBoxSizer *topRightSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Derived values");
   wxStaticBoxSizer *middleSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Control parameters");
   wxStaticBoxSizer *bottomSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Static parameters");
+  wxWindow *derivedBox = topRightSizer->GetStaticBox();
+  wxWindow *controlBox = middleSizer->GetStaticBox();
+  wxWindow *staticBox  = bottomSizer->GetStaticBox();
   wxFlexGridSizer *derivedParamSizer = new wxFlexGridSizer((int)glottis->derivedParams.size(), 2, 0, 0);
   wxFlexGridSizer *controlParamSizer = new wxFlexGridSizer((int)glottis->controlParams.size(), 3, 0, 0);
   wxFlexGridSizer *staticParamSizer  = new wxFlexGridSizer((int)glottis->staticParams.size(), 3, 0, 0);
@@ -199,10 +202,10 @@ void GlottisPanel::initWidgets()
 
   for (i=0; i < (int)glottis->derivedParams.size(); i++)
   {
-    label = new wxStaticText(this, wxID_ANY, glottis->derivedParams[i].name);
+    label = new wxStaticText(derivedBox, wxID_ANY, glottis->derivedParams[i].name);
     derivedParamSizer->Add(label, 0, wxALL, 2);
 
-    labDerivedParam[i] = new wxStaticText(this, IDL_DERIVED_PARAM_0 + i, "xx");
+    labDerivedParam[i] = new wxStaticText(derivedBox, IDL_DERIVED_PARAM_0 + i, "xx");
     labDerivedParam[i]->SetMinSize( wxSize(55, -1) );
     derivedParamSizer->Add(labDerivedParam[i], 0, wxALL, 2);
   }
@@ -217,39 +220,39 @@ void GlottisPanel::initWidgets()
 
   for (i=0; i < (int)glottis->controlParams.size(); i++)
   {
-    label = new wxStaticText(this, wxID_ANY, glottis->controlParams[i].name);
+    label = new wxStaticText(controlBox, wxID_ANY, glottis->controlParams[i].name);
     controlParamSizer->Add(label, 0, wxALL, 5);
 
-    scrControlParam[i] = new wxScrollBar(this, IDS_CONTROL_PARAM_0 + i);
+    scrControlParam[i] = new wxScrollBar(controlBox, IDS_CONTROL_PARAM_0 + i);
     scrControlParam[i]->SetScrollbar(0, 1, NUM_SCROLL_STEPS + 1, 1);
     scrControlParam[i]->SetMinSize( wxSize(120, -1) );
     controlParamSizer->Add(scrControlParam[i], 0, wxALL, 5);
 
-    labControlParam[i] = new wxStaticText(this, IDL_CONTROL_PARAM_0 + i, "xx");
+    labControlParam[i] = new wxStaticText(controlBox, IDL_CONTROL_PARAM_0 + i, "xx");
     labControlParam[i]->SetMinSize( wxSize(55, -1) );
     controlParamSizer->Add(labControlParam[i], 0, wxALL, 5);
   }
 
   // Buttons to manage the glottal shapes.
 
-  label = new wxStaticText(this, wxID_ANY, "Shape:");
+  label = new wxStaticText(controlBox, wxID_ANY, "Shape:");
   settingSizer1->Add(label, 0, wxALL, 5);
 
-  lstShape = new wxComboBox(this, IDL_SETTINGS, wxEmptyString, wxDefaultPosition, 
+  lstShape = new wxComboBox(controlBox, IDL_SETTINGS, wxEmptyString, wxDefaultPosition,
     wxDefaultSize, 0, 0, wxCB_READONLY | wxCB_SORT);
   lstShape->SetMinSize( wxSize(100, -1) );
   settingSizer1->Add(lstShape, 0, wxALL, 5);
 
-  button = new wxButton(this, IDB_SAVE_AS_SELECTED, "Save as selected");
+  button = new wxButton(controlBox, IDB_SAVE_AS_SELECTED, "Save as selected");
   settingSizer1->Add(button, 1, wxALL, 5);
 
-  button = new wxButton(this, IDB_SAVE_AS_EXISTING, "Save as existing");
+  button = new wxButton(controlBox, IDB_SAVE_AS_EXISTING, "Save as existing");
   settingSizer2->Add(button, 1, wxALL, 5);
 
-  button = new wxButton(this, IDB_SAVE_AS_NEW, "Save as new");
+  button = new wxButton(controlBox, IDB_SAVE_AS_NEW, "Save as new");
   settingSizer2->Add(button, 1, wxALL, 5);
 
-  button = new wxButton(this, IDB_REMOVE, "Remove");
+  button = new wxButton(controlBox, IDB_REMOVE, "Remove");
   settingSizer2->Add(button, 1, wxALL, 5);
 
   // ****************************************************************
@@ -266,20 +269,20 @@ void GlottisPanel::initWidgets()
       glottis->staticParams[i].max*glottis->staticParams[i].factor,
       glottis->staticParams[i].userUnit.c_str());
 
-    label = new wxStaticText(this, wxID_ANY, st);
+    label = new wxStaticText(staticBox, wxID_ANY, st);
     staticParamSizer->Add(label, 0, wxALL, 3);
 
-    txtStaticParam[i] = new wxTextCtrl(this, IDT_STATIC_PARAM_0 + i, "", wxDefaultPosition,
+    txtStaticParam[i] = new wxTextCtrl(staticBox, IDT_STATIC_PARAM_0 + i, "", wxDefaultPosition,
       wxDefaultSize, wxTE_PROCESS_ENTER);
     txtStaticParam[i]->SetMinSize( wxSize(60, -1) );
     staticParamSizer->Add(txtStaticParam[i], 0, wxALL, 3);
-    
+
     // Connect the Enter-key event to the event handler
     this->Connect(IDT_STATIC_PARAM_0 + i, wxEVT_COMMAND_TEXT_ENTER,
       wxCommandEventHandler(GlottisPanel::OnStaticParamEntered));
     txtStaticParam[i]->SetToolTip("Press ENTER after changing the value.");
 
-    label = new wxStaticText(this, wxID_ANY, glottis->staticParams[i].userUnit);
+    label = new wxStaticText(staticBox, wxID_ANY, glottis->staticParams[i].userUnit);
     staticParamSizer->Add(label, 0, wxALL, 3);
   }
   

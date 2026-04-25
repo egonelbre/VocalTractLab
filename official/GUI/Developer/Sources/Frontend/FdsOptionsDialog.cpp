@@ -103,6 +103,7 @@ void FdsOptionsDialog::initWidgets()
   wxFlexGridSizer *topLevelSizer = new wxFlexGridSizer(2, 2, 0, 0);
   wxBoxSizer *topLeftSizer = new wxBoxSizer(wxHORIZONTAL);
   wxStaticBoxSizer *topRightSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Additional options");
+  wxWindow *optionsBox = topRightSizer->GetStaticBox();
   wxBoxSizer *bottomRightSizer = new wxBoxSizer(wxVERTICAL);
   wxButton *button = NULL;
 
@@ -131,22 +132,22 @@ void FdsOptionsDialog::initWidgets()
   // Check boxes for other options
   // ****************************************************************
 
-  chkSoftWalls = new wxCheckBox(this, IDC_SOFT_WALLS, "Soft walls");
+  chkSoftWalls = new wxCheckBox(optionsBox, IDC_SOFT_WALLS, "Soft walls");
   topRightSizer->Add(chkSoftWalls, 0, wxGROW | wxALL, 5);
 
-  chkViscousLossForFlow = new wxCheckBox(this, IDC_VISCOUS_LOSS_FOR_FLOW, "Viscous loss for flow");
+  chkViscousLossForFlow = new wxCheckBox(optionsBox, IDC_VISCOUS_LOSS_FOR_FLOW, "Viscous loss for flow");
   topRightSizer->Add(chkViscousLossForFlow, 0, wxGROW | wxALL, 5);
 
-  chkParanasalSinuses = new wxCheckBox(this, IDC_PARANASAL_SINUSES, "Paranasal sinuses");
+  chkParanasalSinuses = new wxCheckBox(optionsBox, IDC_PARANASAL_SINUSES, "Paranasal sinuses");
   topRightSizer->Add(chkParanasalSinuses, 0, wxGROW | wxALL, 5);
 
-  chkPiriformFossa = new wxCheckBox(this, IDC_PIRIFORM_FOSSA, "Piriform fossa");
+  chkPiriformFossa = new wxCheckBox(optionsBox, IDC_PIRIFORM_FOSSA, "Piriform fossa");
   topRightSizer->Add(chkPiriformFossa, 0, wxGROW | wxALL, 5);
 
-  chkLumpedElements = new wxCheckBox(this, IDC_LUMPED_ELEMENTS, "Lumped elements in T-sections");
+  chkLumpedElements = new wxCheckBox(optionsBox, IDC_LUMPED_ELEMENTS, "Lumped elements in T-sections");
   topRightSizer->Add(chkLumpedElements, 0, wxGROW | wxALL, 5);
 
-  chkInnerLengthCorrections = new wxCheckBox(this, IDC_INNER_LENGTH_CORRECTIONS, "Inner (tube) length corrections");
+  chkInnerLengthCorrections = new wxCheckBox(optionsBox, IDC_INNER_LENGTH_CORRECTIONS, "Inner (tube) length corrections");
   topRightSizer->Add(chkInnerLengthCorrections, 0, wxGROW | wxALL, 5);
 
   // ****************************************************************

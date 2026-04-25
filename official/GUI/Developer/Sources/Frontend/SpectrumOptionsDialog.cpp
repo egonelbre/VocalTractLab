@@ -123,7 +123,7 @@ void SpectrumOptionsDialog::initWidgets()
   // Bottom sizer with additional options.
   // ****************************************************************
 
-  chkShowHarmonics = new wxCheckBox(this, IDC_SHOW_HARMONICS, "Show transfer function harmonics");
+  chkShowHarmonics = new wxCheckBox(bottomSizer->GetStaticBox(), IDC_SHOW_HARMONICS, "Show transfer function harmonics");
 
   bottomSizer->Add(chkShowHarmonics, 0, wxGROW | wxALL, 5);
 
