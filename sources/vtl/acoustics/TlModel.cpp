@@ -29,6 +29,30 @@ static const double RS_FACTOR = sqrt(AMBIENT_DENSITY_CGS*AIR_VISCOSITY_CGS*0.5);
 static const double LS_FACTOR = AMBIENT_DENSITY_CGS;
 static const double CP_FACTOR = 1.0 / (AMBIENT_DENSITY_CGS*SOUND_VELOCITY_CGS*SOUND_VELOCITY_CGS);
 
+// Inline complex reciprocal / division. The std::complex<double> operators
+// route through a libgcc helper (__divdc3) using Smith's algorithm for
+// numerical stability against over/underflow. TlModel's impedances are
+// well-conditioned, so the textbook formula a*conj(b)/|b|^2 is equivalent in
+// this regime and inlines to a few mul/div — saving the function call that
+// otherwise dominates BM_GetTransferFunction.
+static inline ComplexValue cinv(const ComplexValue &z)
+{
+  const double r = z.real();
+  const double i = z.imag();
+  const double n = r*r + i*i;
+  return ComplexValue(r / n, -i / n);
+}
+
+static inline ComplexValue cdiv(const ComplexValue &a, const ComplexValue &b)
+{
+  const double br = b.real();
+  const double bi = b.imag();
+  const double n = br*br + bi*bi;
+  const double ar = a.real();
+  const double ai = a.imag();
+  return ComplexValue((ar*br + ai*bi) / n, (ai*br - ar*bi) / n);
+}
+
 // ****************************************************************************
 /// Constructor.
 // ****************************************************************************
@@ -609,7 +633,7 @@ void TlModel::prepareCalculations()
       if ((k == Tube::FIRST_PHARYNX_SECTION + Tube::FOSSA_COUPLING_SECTION) && (options.piriformFossa))
       {
         M.unitMatrix();
-        M.C = 1.0 / fossaInputImpedance;
+        M.C = cinv(fossaInputImpedance);
         K*= M;
       }
     }       // Loop for the sections of the trachea + glottis + pharynx
@@ -657,9 +681,9 @@ void TlModel::prepareCalculations()
           if (k == Tube::FIRST_NOSE_SECTION + Tube::SINUS_COUPLING_SECTION[m])
           {
             M = getSectionMatrix(omega, Tube::FIRST_SINUS_SECTION + m);
-            inputImpedance = M.A / M.C;
+            inputImpedance = cdiv(M.A, M.C);
             M.unitMatrix();
-            M.C = 1.0 / inputImpedance;
+            M.C = cinv(inputImpedance);
             K*= M;
           }
         }
@@ -758,7 +782,7 @@ ComplexValue TlModel::getRadiationImpedance(double omega, double radiationArea_c
     ComplexValue Z1 = (128.0*AMBIENT_DENSITY_CGS*SOUND_VELOCITY_CGS) / (9.0*M_PI*M_PI*radiationArea_cm2);
     ComplexValue Z2 = ComplexValue(0.0, (omega*8.0*AMBIENT_DENSITY_CGS) / (3.0*M_PI*sqrt(M_PI*radiationArea_cm2)));
  
-    radiationImpedance = (Z1*Z2) / (Z1 + Z2);
+    radiationImpedance = cdiv(Z1*Z2, Z1 + Z2);
   }
 
   return radiationImpedance;
@@ -813,10 +837,11 @@ void TlModel::getLumpedSectionImpedances(double omega, Tube::Section *ts, Comple
   Zb = ComplexValue(0, omega * Cp);
   if (options.softWalls)
   {
-    Zb += 1.0 / (ComplexValue(WALL_DAMPING_PER_UNIT_AREA_CGS, 
+    // Inner division is by a real; only the outer reciprocal needs cinv().
+    Zb += cinv(ComplexValue(WALL_DAMPING_PER_UNIT_AREA_CGS,
       omega * WALL_MASS_PER_UNIT_AREA_CGS - WALL_STIFFNESS_PER_UNIT_AREA_CGS / omega) / (length * circ));
   }
-  Zb = 1.0 / Zb;        // From conductivity to impedance
+  Zb = cinv(Zb);        // From conductivity to impedance
 }
 
 
@@ -865,12 +890,12 @@ Matrix2x2 TlModel::getSectionMatrix(double omega, int section)
     double Gp = innerSurface / 65000.0;
 
     ComplexValue Za = ComplexValue(Rs, omega*Ls);
-    ComplexValue Zb = 1.0 / ComplexValue(Gp, omega*Cp);   // 1.0 / Sum of the conductivities
+    ComplexValue Zb = cinv(ComplexValue(Gp, omega*Cp));   // 1.0 / Sum of the conductivities
 
     M.D = -1.0;
     M.B = -Zb;
-    M.C = 1.0/Zb;
-    M.A = 1.0 + Za/Zb;
+    M.C = cinv(Zb);
+    M.A = 1.0 + cdiv(Za, Zb);
   }
   else
 
@@ -884,9 +909,9 @@ Matrix2x2 TlModel::getSectionMatrix(double omega, int section)
     getLumpedSectionImpedances(omega, ts, Za, Zb);
 
     // The matrix elements
-    M.A = M.D = 1.0 + (Za/Zb);
-    M.B = (Za*Za)/Zb + 2.0*Za;
-    M.C = 1.0 / Zb;
+    M.A = M.D = 1.0 + cdiv(Za, Zb);
+    M.B = cdiv(Za*Za, Zb) + 2.0*Za;
+    M.C = cinv(Zb);
   }
   else
 
@@ -912,8 +937,9 @@ Matrix2x2 TlModel::getSectionMatrix(double omega, int section)
     // The entire conductivity in parallel (per length-unit)
     ComplexValue y(0, omega*Cp);
     if (options.softWalls)
-    { 
-      y += 1.0 / (ComplexValue(WALL_DAMPING_PER_UNIT_AREA_CGS, 
+    {
+      // Inner division is by a real; only the outer reciprocal needs cinv().
+      y += cinv(ComplexValue(WALL_DAMPING_PER_UNIT_AREA_CGS,
         omega* WALL_MASS_PER_UNIT_AREA_CGS - WALL_STIFFNESS_PER_UNIT_AREA_CGS / omega) / circ);
     }
 
@@ -925,7 +951,7 @@ Matrix2x2 TlModel::getSectionMatrix(double omega, int section)
     M.A = M.D = std::cosh(gamma*length);
     ComplexValue SINH = std::sinh(gamma*length);
     M.B = SINH * Z0;
-    M.C = SINH / Z0;
+    M.C = cdiv(SINH, Z0);
   }
 
   return M;
@@ -999,7 +1025,7 @@ ComplexValue TlModel::getInputImpedance(int freqIndex, int section)
   {
     ComplexValue noseInputImpedance  = getInputImpedance(freqIndex, Tube::FIRST_NOSE_SECTION);
     ComplexValue mouthInputImpedance = getInputImpedance(freqIndex, Tube::FIRST_MOUTH_SECTION);
-    loadImpedance = (noseInputImpedance*mouthInputImpedance) / (noseInputImpedance+mouthInputImpedance);
+    loadImpedance = cdiv(noseInputImpedance*mouthInputImpedance, noseInputImpedance+mouthInputImpedance);
 
     M.unitMatrix();
     if (section > Tube::FIRST_TRACHEA_SECTION)
@@ -1046,7 +1072,7 @@ ComplexValue TlModel::getInputImpedance(int freqIndex, int section)
     M*= matrixProduct[Tube::LAST_NOSE_SECTION][freqIndex];
   }
 
-  return (M.A*loadImpedance + M.B) / (M.C*loadImpedance + M.D);
+  return cdiv(M.A*loadImpedance + M.B, M.C*loadImpedance + M.D);
 }
 
 
@@ -1082,7 +1108,7 @@ ComplexValue TlModel::getOutputImpedance(int freqIndex, int section)
   {
     M = matrixProduct[Tube::LAST_PHARYNX_SECTION][freqIndex];
     K.unitMatrix();
-    K.C = 1.0 / getInputImpedance(freqIndex, Tube::FIRST_NOSE_SECTION);
+    K.C = cinv(getInputImpedance(freqIndex, Tube::FIRST_NOSE_SECTION));
     M*= K;          // Coupling matrix for the nasal cavity
     M*= matrixProduct[section][freqIndex];
   }
@@ -1096,12 +1122,12 @@ ComplexValue TlModel::getOutputImpedance(int freqIndex, int section)
   {
     M = matrixProduct[Tube::LAST_PHARYNX_SECTION][freqIndex];
     K.unitMatrix();
-    K.C = 1.0 / getInputImpedance(freqIndex, Tube::FIRST_MOUTH_SECTION);
+    K.C = cinv(getInputImpedance(freqIndex, Tube::FIRST_MOUTH_SECTION));
     M*= K;        // Coupling matrix for the mouth cavity
     M*= matrixProduct[section][freqIndex];
   }
 
-  return (lungImpedance*M.D + M.B) / (M.A + lungImpedance*M.C);
+  return cdiv(lungImpedance*M.D + M.B, M.A + lungImpedance*M.C);
 }
 
 
@@ -1150,38 +1176,38 @@ ComplexValue TlModel::getPressureSourceTF(int freqIndex, int section)
       outputImpedance = getOutputImpedance(freqIndex, section-1);
     }
 
-    factor = 1.0 / (outputImpedance + inputImpedance);
+    factor = cinv(outputImpedance + inputImpedance);
 
     // The matrix from section -> Tube::LAST_PHARYNX_SECTION
 
     M.unitMatrix();
-    if (section > Tube::FIRST_TRACHEA_SECTION) 
-    { 
-      M = matrixProduct[section-1][freqIndex]; 
+    if (section > Tube::FIRST_TRACHEA_SECTION)
+    {
+      M = matrixProduct[section-1][freqIndex];
     }
     M.invert();
     M*= matrixProduct[Tube::LAST_PHARYNX_SECTION][freqIndex];
     pharynxMatrix = M;
 
     // The TF from section -> Tube::LAST_MOUTH_SECTION
-    
+
     K = pharynxMatrix;
 
     M.unitMatrix();
-    M.C = 1.0 / getInputImpedance(freqIndex, Tube::FIRST_NOSE_SECTION);
+    M.C = cinv(getInputImpedance(freqIndex, Tube::FIRST_NOSE_SECTION));
     K*= M;      // Kopplungsmatrix zum Nasenraum
     K*= matrixProduct[Tube::LAST_MOUTH_SECTION][freqIndex];
-    result+= factor / (K.C*mouthRadiationImpedance[freqIndex] + K.D);
+    result+= cdiv(factor, K.C*mouthRadiationImpedance[freqIndex] + K.D);
 
     // The TF from section -> Tube::LAST_NOSE_SECTION
-    
+
     K = pharynxMatrix;
 
     M.unitMatrix();
-    M.C = 1.0 / getInputImpedance(freqIndex, Tube::FIRST_MOUTH_SECTION);
+    M.C = cinv(getInputImpedance(freqIndex, Tube::FIRST_MOUTH_SECTION));
     K*= M;      // Kopplungsmatrix zum Mundraum
     K*= matrixProduct[Tube::LAST_NOSE_SECTION][freqIndex];
-    result+= factor / (K.C*noseRadiationImpedance[freqIndex] + K.D);
+    result+= cdiv(factor, K.C*noseRadiationImpedance[freqIndex] + K.D);
   }
   else
 
@@ -1216,14 +1242,14 @@ ComplexValue TlModel::getPressureSourceTF(int freqIndex, int section)
     {
       Za = getOutputImpedance(freqIndex, Tube::LAST_PHARYNX_SECTION);
       Zb = getInputImpedance(freqIndex, Tube::FIRST_NOSE_SECTION);
-      outputImpedance = (Za*Zb) / (Za+Zb);
+      outputImpedance = cdiv(Za*Zb, Za+Zb);
     }
     else
     {
       outputImpedance = getOutputImpedance(freqIndex, section-1);
     }
 
-    factor = 1.0 / (outputImpedance + inputImpedance);
+    factor = cinv(outputImpedance + inputImpedance);
 
     // The matrix from section -> Tube::LAST_MOUTH_SECTION
 
@@ -1243,7 +1269,7 @@ ComplexValue TlModel::getPressureSourceTF(int freqIndex, int section)
       M = matrixProduct[Tube::LAST_MOUTH_SECTION][freqIndex];
     }
 
-    result+= factor / (M.C*mouthRadiationImpedance[freqIndex] + M.D);
+    result+= cdiv(factor, M.C*mouthRadiationImpedance[freqIndex] + M.D);
 
     // The matrix from section -> Tube::LAST_NOSE_SECTION
 
@@ -1260,12 +1286,12 @@ ComplexValue TlModel::getPressureSourceTF(int freqIndex, int section)
     M.invert();
 
     K.unitMatrix();
-    K.C = 1.0 / getOutputImpedance(freqIndex, Tube::LAST_PHARYNX_SECTION);
+    K.C = cinv(getOutputImpedance(freqIndex, Tube::LAST_PHARYNX_SECTION));
     M*= K;        // Coupling matrix for the sub-velar system
 
     M*= matrixProduct[Tube::LAST_NOSE_SECTION][freqIndex];
 
-    result+= factor / (M.C*noseRadiationImpedance[freqIndex] + M.D);
+    result+= cdiv(factor, M.C*noseRadiationImpedance[freqIndex] + M.D);
   }
 
   return result;
@@ -1300,7 +1326,7 @@ ComplexValue TlModel::getFlowSourceTF(int freqIndex, int section)
   if (section == Tube::FIRST_NOSE_SECTION)
   {
     K = matrixProduct[Tube::LAST_NOSE_SECTION][freqIndex];
-    result = 1.0 / (K.C*noseRadiationImpedance[freqIndex] + K.D);
+    result = cinv(K.C*noseRadiationImpedance[freqIndex] + K.D);
     // Nothing more to do -> Return right here!
     return result;
   }
@@ -1320,7 +1346,7 @@ ComplexValue TlModel::getFlowSourceTF(int freqIndex, int section)
     {
       Za = getInputImpedance(freqIndex, Tube::FIRST_MOUTH_SECTION);
       Zb = getInputImpedance(freqIndex, Tube::FIRST_NOSE_SECTION);
-      inputImpedance = (Za*Zb) / (Za+Zb);
+      inputImpedance = cdiv(Za*Zb, Za+Zb);
     }
     else
     { 
@@ -1347,8 +1373,8 @@ ComplexValue TlModel::getFlowSourceTF(int freqIndex, int section)
 
     // The factor for the TF
 
-    factor = (sourceImpedance*outputImpedance) / (sourceImpedance + outputImpedance);
-    factor = factor / (inputImpedance + factor);
+    factor = cdiv(sourceImpedance*outputImpedance, sourceImpedance + outputImpedance);
+    factor = cdiv(factor, inputImpedance + factor);
 
     // **************************************************************
     // The matrix from section -> Tube::LAST_PHARYNX_SECTION
@@ -1370,11 +1396,11 @@ ComplexValue TlModel::getFlowSourceTF(int freqIndex, int section)
     K = pharynxMatrix;
 
     M.unitMatrix();
-    M.C = 1.0 / getInputImpedance(freqIndex, Tube::FIRST_NOSE_SECTION);
+    M.C = cinv(getInputImpedance(freqIndex, Tube::FIRST_NOSE_SECTION));
     K*= M;      // Coupling matrix to the nose cavity
 
     K*= matrixProduct[Tube::LAST_MOUTH_SECTION][freqIndex];
-    result+= factor / (K.C*mouthRadiationImpedance[freqIndex] + K.D);
+    result+= cdiv(factor, K.C*mouthRadiationImpedance[freqIndex] + K.D);
 
     // **************************************************************
     // The TF from section -> Tube::LAST_NOSE_SECTION
@@ -1383,11 +1409,11 @@ ComplexValue TlModel::getFlowSourceTF(int freqIndex, int section)
     K = pharynxMatrix;
 
     M.unitMatrix();
-    M.C = 1.0 / getInputImpedance(freqIndex, Tube::FIRST_MOUTH_SECTION);
+    M.C = cinv(getInputImpedance(freqIndex, Tube::FIRST_MOUTH_SECTION));
     K*= M;      // Coupling matrix to the mouth cavity
 
     K*= matrixProduct[Tube::LAST_NOSE_SECTION][freqIndex];
-    result+= factor / (K.C*noseRadiationImpedance[freqIndex] + K.D);
+    result+= cdiv(factor, K.C*noseRadiationImpedance[freqIndex] + K.D);
   }
   else
 
@@ -1416,7 +1442,7 @@ ComplexValue TlModel::getFlowSourceTF(int freqIndex, int section)
     {
       Za = getOutputImpedance(freqIndex, Tube::LAST_PHARYNX_SECTION);
       Zb = getInputImpedance(freqIndex, Tube::FIRST_NOSE_SECTION);
-      outputImpedance = (Za*Zb) / (Za+Zb);
+      outputImpedance = cdiv(Za*Zb, Za+Zb);
     }
     else
     {
@@ -1432,8 +1458,8 @@ ComplexValue TlModel::getFlowSourceTF(int freqIndex, int section)
 
     // The factor for the TF
 
-    factor = (sourceImpedance*outputImpedance) / (sourceImpedance + outputImpedance);
-    factor = factor / (inputImpedance + factor);
+    factor = cdiv(sourceImpedance*outputImpedance, sourceImpedance + outputImpedance);
+    factor = cdiv(factor, inputImpedance + factor);
 
     // The matrix from section -> Tube::LAST_MOUTH_SECTION
 
@@ -1445,7 +1471,7 @@ ComplexValue TlModel::getFlowSourceTF(int freqIndex, int section)
     K.B = Za;
     K*= M;
 
-    result+= factor / (K.C*mouthRadiationImpedance[freqIndex] + K.D);
+    result+= cdiv(factor, K.C*mouthRadiationImpedance[freqIndex] + K.D);
 
     // The matrix from section -> Tube::LAST_NOSE_SECTION
 
@@ -1453,7 +1479,7 @@ ComplexValue TlModel::getFlowSourceTF(int freqIndex, int section)
     M.invert();
 
     K.unitMatrix();
-    K.C = 1.0 / getOutputImpedance(freqIndex, Tube::LAST_PHARYNX_SECTION);
+    K.C = cinv(getOutputImpedance(freqIndex, Tube::LAST_PHARYNX_SECTION));
     M*= K;        // Coupling matrix for the sub-velar system
 
     M*= matrixProduct[Tube::LAST_NOSE_SECTION][freqIndex];
@@ -1462,7 +1488,7 @@ ComplexValue TlModel::getFlowSourceTF(int freqIndex, int section)
     K.B = Za;
     K*= M;
 
-    result+= factor / (K.C*noseRadiationImpedance[freqIndex] + K.D);
+    result+= cdiv(factor, K.C*noseRadiationImpedance[freqIndex] + K.D);
   }
 
   return result;
