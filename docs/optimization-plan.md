@@ -158,7 +158,24 @@ check before changing the math).
 behind audio-regression hashes; if the hash drifts, keep the sqrt
 form and only land the constant hoisting.
 
-### [ ] 4. Cache `GeometricGlottis2025::calcGeometry` between updates
+### [-] 4. Cache `GeometricGlottis2025::calcGeometry` between updates — **deferred**
+
+**Notes (2026-04-25):** read-through showed the function's "fast"
+state (`phase`, `supraglottalPressure_dPa`) is updated every sample
+by `incTime()`, so almost every output (`displacement`, `area`,
+`amplitude` via `transPressure_dPa`) genuinely changes per sample.
+The only purely-slow piece is `length`/`thickness` (depend on
+static params + `FREQUENCY`).
+
+A real cache would need a dirty-flag system across every
+control-param mutation site in `Glottis::set*` and friends — a
+larger redesign than the other items here. Deferring; the
+straightforward micro-optimizations in this function (sincos
+fusion, constant hoisting) would also need a separate measurement
+pass to confirm a win and aren't an obvious slam dunk under
+`-fno-math-errno` LTO.
+
+
 
 **Where:** `sources/vtl/glottis/GeometricGlottis2025.cpp:153`,
 called from `Synthesizer::addSample:248`.
@@ -180,7 +197,23 @@ phase update in the hot path.
 
 **Expected:** 5–10% on `BM_SynthesisAddTube_Block`.
 
-### [ ] 5. Cache `Surface::prepareIntersection` / `getTriangleList` per articulation
+### [~] 5. Cache `Surface::prepareIntersection` / `getTriangleList` per articulation — **already cached, mis-scoped**
+
+**Notes (2026-04-25):** the relevant cache *already exists*: the
+plural `Surface::prepareIntersections()` (tile-to-triangle
+assignment, geometry-only) is gated behind `intersectionsPrepared[]`
+in `VocalTract.cpp:5806`, and that flag is reset only in the
+articulation update path (`VocalTract.cpp:2419`). The remaining
+per-call work — singular `prepareIntersection(P, v)` and
+`getTriangleList()` — depends on the cutting plane `(P, v)`, and
+each cross-section in `calcCrossSections` uses a different one
+(`centerLine[i].point/normal`), so there's nothing to hoist. The
+`appendTileTrianglesUnique` and `classifyVertexLazy` self-time
+recorded in the profile is the inherent cost of the tile walk and
+edge classification, both already inlined and using stamp-based
+lazy invalidation.
+
+
 
 **Where:** `sources/vtl/anatomy/VocalTract.cpp:5809–5814` (called inside
 `getCrossProfiles`).
@@ -201,7 +234,32 @@ to invalidate on every path that mutates articulation.
 
 **Expected:** 10–15% on `BM_GesturalScoreToAudio`.
 
-### [ ] 6. Replace constant-exponent `pow()` in `prepareTimeStep`
+### [~] 6. Replace constant-exponent `pow()` in `prepareTimeStep` — **no measurable win, not committed**
+
+**Result (2026-04-25):** tried (a) replacing `pow(x, AC_EXPONENT)`
+with `x` via an `AC_EXPONENT == 1.0` ternary, (b) hoisting
+`sqrt(AC_FREQUENCY_HZ)` to a file-scope `static const` (avoiding
+the local-static guard), and (c) `pow(x, 2.0/3.0)` → `cbrt(x*x)`.
+
+The cbrt change drifted the audio hash (~2e-14 max, pure last-bit
+noise, audibly identical) but reverted because Apple's `cbrt` was
+not faster than `pow` here. The remaining (a)+(b) change kept
+hashes bit-identical — meaning the compiler is already folding
+`pow(x, 1.0)` to `x` under `-O3 -flto -fno-math-errno`.
+
+A/B comparison (median of 5 reps × 4 s):
+
+| Bench | Before | After | Δ |
+|---|---:|---:|---:|
+| BM_GesturalScoreToAudio | 1321 ms | 1331 ms | +0.8% |
+| BM_SynthesisAddTube_Block | 765 µs | 764 µs | −0.1% |
+| BM_TractToTube | 1892 µs | 1929 µs | +2% |
+| BM_GetTransferFunction | 2076 µs | 2066 µs | −0.5% |
+
+All deltas inside run-to-run noise on this machine — the compiler
+had already taken the win. Reverted.
+
+
 
 **Where:** `sources/vtl/acoustics/TdsModel.cpp:718, 719, 746`.
 
