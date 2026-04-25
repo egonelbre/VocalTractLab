@@ -6531,128 +6531,116 @@ void VocalTract::getCrossProfiles(Point2D P, Point2D v, double *upperProfile,
 
 
 // ****************************************************************************
-// Samples the cutting line between P0 and P1 horizontally and inserts it into 
+// Shared setup for the three insert*ProfileLine functions: shifts P0/P1 to
+// the middle of the profile, swaps so P0 is on the left, extends by LENGTH_INC
+// along the line direction, then computes the loop range clamped to
+// [0, NUM_PROFILE_SAMPLES-1] together with the y at the first sample and the
+// per-sample y step. Returns false when there is nothing to write.
+// ****************************************************************************
+
+namespace {
+struct ProfileLineSetup
+{
+  int    startI;
+  int    endI;
+  double y0;
+  double dy;
+};
+
+inline bool setupProfileLine(Point2D P0, Point2D P1, ProfileLineSetup &s)
+{
+  if (P0.x == P1.x) { return false; }
+
+  P0.x += 0.5 * VocalTract::PROFILE_LENGTH;
+  P1.x += 0.5 * VocalTract::PROFILE_LENGTH;
+
+  if (P0.x > P1.x)
+  {
+    Point2D tempPoint = P0;
+    P0 = P1;
+    P1 = tempPoint;
+  }
+
+  // Extend the line by a little bit at both ends so a line that ends right
+  // on a sample boundary still contributes that sample.
+  const double LENGTH_INC = 0.01;
+  Point2D v = P1 - P0;
+  v.normalize();
+  P0 -= LENGTH_INC * v;
+  P1 += LENGTH_INC * v;
+
+  const int firstSample = (int)(P0.x / VocalTract::PROFILE_SAMPLE_LENGTH);
+  const int lastSample  = (int)(P1.x / VocalTract::PROFILE_SAMPLE_LENGTH);
+  if (firstSample == lastSample) { return false; }
+
+  const double dx_step = VocalTract::PROFILE_SAMPLE_LENGTH;
+  const double slope   = (P1.y - P0.y) / (P1.x - P0.x);
+
+  // Hoist the per-iteration `(i >= 0) && (i < N)` bounds check by clamping
+  // the loop range up front and advancing y0 to match the new start.
+  int rawStart = firstSample + 1;
+  int rawEnd   = lastSample;
+  s.startI = rawStart < 0 ? 0 : rawStart;
+  s.endI   = rawEnd >= VocalTract::NUM_PROFILE_SAMPLES ? VocalTract::NUM_PROFILE_SAMPLES - 1 : rawEnd;
+  if (s.startI > s.endI) { return false; }
+
+  s.dy = slope * dx_step;
+  s.y0 = P0.y + ((double)s.startI * dx_step - P0.x) * slope;
+  return true;
+}
+} // namespace
+
+// ****************************************************************************
+// Samples the cutting line between P0 and P1 horizontally and inserts it into
 // the given upper profile.
 // ****************************************************************************
 
-void VocalTract::insertUpperProfileLine(Point2D P0, Point2D P1, int surfaceIndex, 
+void VocalTract::insertUpperProfileLine(Point2D P0, Point2D P1, int surfaceIndex,
   double *upperProfile, int *upperProfileSurface)
 {
-  int i;
-  Point2D v;
+  ProfileLineSetup s;
+  if (!setupProfileLine(P0, P1, s)) { return; }
 
-  // If both points have the same x-value, do nothing.
-  if (P0.x == P1.x) { return; }
-
-  // Move both points into the middle.
-  P0.x+= 0.5*PROFILE_LENGTH;
-  P1.x+= 0.5*PROFILE_LENGTH;
-
-  // P0 must always be left of P1.
-  if (P0.x > P1.x)
+  double y = s.y0;
+  for (int i = s.startI; i <= s.endI; i++)
   {
-    Point2D tempPoint = P0;
-    P0 = P1;
-    P1 = tempPoint;
-  }
-
-  // Extend the line by a little bit at both ends.
-  const double LENGTH_INC = 0.01;
-  v = P1 - P0;
-  v.normalize();
-
-  P0-= LENGTH_INC*v;
-  P1+= LENGTH_INC*v;
-
-  // Do the horizontal sampling.
-
-  int firstSample = (int)(P0.x / PROFILE_SAMPLE_LENGTH);
-  int lastSample  = (int)(P1.x / PROFILE_SAMPLE_LENGTH);
-
-  if (firstSample == lastSample) { return; }
-
-  double dx = PROFILE_SAMPLE_LENGTH;
-  double dy = (P1.y - P0.y)*dx / (P1.x - P0.x);
-  double y  = P0.y + ((firstSample + 1.0)*dx - P0.x)*dy/dx;
-
-  for (i=firstSample+1; i <= lastSample; i++)
-  {
-    if ((i >= 0) && (i < NUM_PROFILE_SAMPLES))
+    if ((y <= upperProfile[i]) && (y >= MIN_PROFILE_VALUE) && (y <= MAX_PROFILE_VALUE))
     {
-      if ((y <= upperProfile[i]) && (y >= MIN_PROFILE_VALUE) && (y <= MAX_PROFILE_VALUE))
-      { 
-        upperProfile[i] = y; 
-        upperProfileSurface[i] = surfaceIndex;
-      }
+      upperProfile[i] = y;
+      upperProfileSurface[i] = surfaceIndex;
     }
-    y+= dy;
+    y += s.dy;
   }
 }
 
 
 // ****************************************************************************
-// Samples the cutting line between P0 and P1 horizontally and inserts it into 
+// Samples the cutting line between P0 and P1 horizontally and inserts it into
 // the given lower profile.
 // ****************************************************************************
 
-void VocalTract::insertLowerProfileLine(Point2D P0, Point2D P1, int surfaceIndex, 
+void VocalTract::insertLowerProfileLine(Point2D P0, Point2D P1, int surfaceIndex,
   double *lowerProfile, int *lowerProfileSurface)
 {
-  int i;
-  Point2D v;
+  ProfileLineSetup s;
+  if (!setupProfileLine(P0, P1, s)) { return; }
 
-  // If both points have the same x-value, do nothing.
-  if (P0.x == P1.x) { return; }
-
-  // Move both points into the middle.
-  P0.x+= 0.5*PROFILE_LENGTH;
-  P1.x+= 0.5*PROFILE_LENGTH;
-
-  // P0 must always be left of P1.
-  if (P0.x > P1.x)
+  double y = s.y0;
+  for (int i = s.startI; i <= s.endI; i++)
   {
-    Point2D tempPoint = P0;
-    P0 = P1;
-    P1 = tempPoint;
-  }
-
-  // Extend the line by a little bit at both ends.
-  const double LENGTH_INC = 0.01;
-  v = P1 - P0;
-  v.normalize();
-
-  P0-= LENGTH_INC*v;
-  P1+= LENGTH_INC*v;
-
-  // Do the horizontal sampling.
-
-  int firstSample = (int)(P0.x / PROFILE_SAMPLE_LENGTH);
-  int lastSample  = (int)(P1.x / PROFILE_SAMPLE_LENGTH);
-
-  if (firstSample == lastSample) { return; }
-
-  double dx = PROFILE_SAMPLE_LENGTH;
-  double dy = (P1.y - P0.y)*dx / (P1.x - P0.x);
-  double y  = P0.y + ((firstSample + 1.0)*dx - P0.x)*dy/dx;
-
-  for (i=firstSample+1; i <= lastSample; i++)
-  {
-    if ((i >= 0) && (i < NUM_PROFILE_SAMPLES))
+    if ((y >= lowerProfile[i]) && (y >= MIN_PROFILE_VALUE) && (y <= MAX_PROFILE_VALUE))
     {
-      if ((y >= lowerProfile[i]) && (y >= MIN_PROFILE_VALUE) && (y <= MAX_PROFILE_VALUE)) 
-      { 
-        lowerProfile[i] = y; 
-        lowerProfileSurface[i] = surfaceIndex;
-      }
+      lowerProfile[i] = y;
+      lowerProfileSurface[i] = surfaceIndex;
     }
-    y+= dy;
+    y += s.dy;
   }
 }
 
 
 
 // ****************************************************************************
-// Samples the cutting line between P0 and P1 horizontally and inserts it into 
+// Samples the cutting line between P0 and P1 horizontally and inserts it into
 // the given lower profile, and also in the upper profile, if the current
 // upper profile is supplemented (but not replaced).
 // ****************************************************************************
@@ -6660,63 +6648,27 @@ void VocalTract::insertLowerProfileLine(Point2D P0, Point2D P1, int surfaceIndex
 void VocalTract::insertLowerCoverProfileLine(Point2D P0, Point2D P1, int surfaceIndex,
   double *upperProfile, int *upperProfileSurface, double *lowerProfile, int *lowerProfileSurface)
 {
-  int i;
-  Point2D v;
+  ProfileLineSetup s;
+  if (!setupProfileLine(P0, P1, s)) { return; }
 
-  // If both points have the same x-value, do nothing.
-  if (P0.x == P1.x) { return; }
-
-  // Move both points into the middle.
-  P0.x+= 0.5*PROFILE_LENGTH;
-  P1.x+= 0.5*PROFILE_LENGTH;
-
-  // P0 must always be left of P1.
-  if (P0.x > P1.x)
+  double y = s.y0;
+  for (int i = s.startI; i <= s.endI; i++)
   {
-    Point2D tempPoint = P0;
-    P0 = P1;
-    P1 = tempPoint;
-  }
-
-  // Extend the line by a little bit at both ends.
-  const double LENGTH_INC = 0.01;
-  v = P1 - P0;
-  v.normalize();
-
-  P0-= LENGTH_INC*v;
-  P1+= LENGTH_INC*v;
-
-  // Do the horizontal sampling.
-
-  int firstSample = (int)(P0.x / PROFILE_SAMPLE_LENGTH);
-  int lastSample  = (int)(P1.x / PROFILE_SAMPLE_LENGTH);
-
-  if (firstSample == lastSample) { return; }
-
-  double dx = PROFILE_SAMPLE_LENGTH;
-  double dy = (P1.y - P0.y)*dx / (P1.x - P0.x);
-  double y  = P0.y + ((firstSample + 1.0)*dx - P0.x)*dy/dx;
-
-  for (i=firstSample+1; i <= lastSample; i++)
-  {
-    if ((i >= 0) && (i < NUM_PROFILE_SAMPLES))
+    if ((y >= MIN_PROFILE_VALUE) && (y <= MAX_PROFILE_VALUE))
     {
-      if ((y >= MIN_PROFILE_VALUE) && (y <= MAX_PROFILE_VALUE)) 
+      if (y >= lowerProfile[i])
       {
-        if (y >= lowerProfile[i])
-        { 
-          lowerProfile[i] = y; 
-          lowerProfileSurface[i] = surfaceIndex;
-        }
-        // Insert into the upper profile only if it was not defined yet at this place.
-        if ((upperProfile[i] == EXTREME_PROFILE_VALUE) && (y <= upperProfile[i]))
-        { 
-          upperProfile[i] = y; 
-          upperProfileSurface[i] = surfaceIndex;
-        }
+        lowerProfile[i] = y;
+        lowerProfileSurface[i] = surfaceIndex;
+      }
+      // Insert into the upper profile only if it was not defined yet at this place.
+      if ((upperProfile[i] == EXTREME_PROFILE_VALUE) && (y <= upperProfile[i]))
+      {
+        upperProfile[i] = y;
+        upperProfileSurface[i] = surfaceIndex;
       }
     }
-    y+= dy;
+    y += s.dy;
   }
 }
 

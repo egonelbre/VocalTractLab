@@ -47,7 +47,22 @@ public:
   bool isLeftFrom(Vector2D& V);
   Point3D toPoint3D();
   void leanOn(Vector2D V, Point2D A);
-  Point2D normalize();
+
+  // Defined inline because callers in the cross-section profile code
+  // hit this on most cuts, and the cross-TU call was showing up in
+  // the flat profile.
+  Point2D normalize()
+  {
+    double l_sq = x*x + y*y;
+    if (l_sq != 0.0)
+    {
+      double inv_l = 1.0 / sqrt(l_sq);
+      x *= inv_l;
+      y *= inv_l;
+    }
+    return Point2D(x, y);
+  }
+
   Point2D turnRight();
   Point2D turnLeft();
   void turn(double angle);

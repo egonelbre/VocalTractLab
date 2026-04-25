@@ -101,18 +101,7 @@ void Point2D::leanOn(Vector2D V, Point2D A)
 }
 
 // ****************************************************************************
-
-Point2D Point2D::normalize()
-{
-  double l = sqrt(x*x + y*y);
-  if (l != 0.0)
-  {
-    x/= l;
-    y/= l;
-  }
-  return Point2D(x, y);
-}
-
+// Point2D::normalize() is now defined inline in Geometry.h.
 // ****************************************************************************
 // Turn the vector (x,y) to the right by 90 deg.
 // ****************************************************************************
