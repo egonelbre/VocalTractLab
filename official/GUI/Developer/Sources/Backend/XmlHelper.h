@@ -39,11 +39,11 @@
 class XmlHelper
 {
 public:
-  static XmlNode *getChildNode(XmlNode *node, const char *childName, int index = 0) throw (std::string);
+  static XmlNode *getChildNode(XmlNode *node, const char *childName, int index = 0);
 
-  static void readAttribute(XmlNode *node, const char *attrName, double &attrValue) throw (std::string);
-  static void readAttribute(XmlNode *node, const char *attrName, int &attrValue) throw (std::string);
-  static void readAttribute(XmlNode *node, const char *attrName, std::string &attrValue) throw (std::string);
+  static void readAttribute(XmlNode *node, const char *attrName, double &attrValue);
+  static void readAttribute(XmlNode *node, const char *attrName, int &attrValue);
+  static void readAttribute(XmlNode *node, const char *attrName, std::string &attrValue);
 };
 
 // ****************************************************************************

@@ -392,9 +392,9 @@ public:
   // Reading and writing of anatomy and shapes from/to xml-files.
   // ****************************************************************
 
-  void readAnatomyXml(XmlNode *anatomyNode) throw (std::string);
-  void readShapesXml(XmlNode *shapeListNode) throw (std::string);
-  void readFromXml(const string &speakerFileName) throw (std::string);
+  void readAnatomyXml(XmlNode *anatomyNode);
+  void readShapesXml(XmlNode *shapeListNode);
+  void readFromXml(const string &speakerFileName);
   void writeAnatomyXml(std::ostream &os, int indent);
   void writeShapesXml(std::ostream &os, int indent);
   void writeToXml(std::ostream &os, int indent);

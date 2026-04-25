@@ -26,8 +26,7 @@
 // ****************************************************************************
 // ****************************************************************************
 
-XmlNode *XmlHelper::getChildNode(XmlNode *node, const char *childName, int index) throw (std::string)
-{
+XmlNode *XmlHelper::getChildNode(XmlNode *node, const char *childName, int index){
   if ((node == NULL) || (childName == NULL))
   { 
     throw std::string("Invalid parameters for getChildNode(...).");
@@ -50,8 +49,7 @@ XmlNode *XmlHelper::getChildNode(XmlNode *node, const char *childName, int index
 // ****************************************************************************
 // ****************************************************************************
 
-void XmlHelper::readAttribute(XmlNode *node, const char *attrName, double &attrValue) throw (std::string)
-{
+void XmlHelper::readAttribute(XmlNode *node, const char *attrName, double &attrValue){
   if ((node == NULL) || (attrName == NULL))
   {
     throw std::string("Invalid parameters for readAttribute(...).");
@@ -69,8 +67,7 @@ void XmlHelper::readAttribute(XmlNode *node, const char *attrName, double &attrV
 // ****************************************************************************
 // ****************************************************************************
 
-void XmlHelper::readAttribute(XmlNode *node, const char *attrName, int &attrValue) throw (std::string)
-{
+void XmlHelper::readAttribute(XmlNode *node, const char *attrName, int &attrValue){
   if ((node == NULL) || (attrName == NULL))
   {
     throw std::string("Invalid parameters for readAttribute(...).");
@@ -88,8 +85,7 @@ void XmlHelper::readAttribute(XmlNode *node, const char *attrName, int &attrValu
 // ****************************************************************************
 // ****************************************************************************
 
-void XmlHelper::readAttribute(XmlNode *node, const char *attrName, std::string &attrValue) throw (std::string)
-{
+void XmlHelper::readAttribute(XmlNode *node, const char *attrName, std::string &attrValue){
   if ((node == NULL) || (attrName == NULL))
   {
     throw std::string("Invalid parameters for readAttribute(...).");
