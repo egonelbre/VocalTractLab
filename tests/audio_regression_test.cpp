@@ -10,6 +10,7 @@
 // dumps the actual samples as `audio_regression_actual.raw` next to the cwd
 // so the failure can be inspected (load as float64 mono @ 48 kHz).
 
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -195,6 +196,31 @@ bool testGesturalScoreToAudio() {
   const uint64_t audioHash =
       hashSpan(audio.data(), static_cast<size_t>(numSamples));
   if (!checkHash("audio samples", audioHash, 0xcb0962f03ef5b19aULL)) {
+    // If a reference dump from a known-good build is sitting next to us,
+    // quantify the drift (max-abs diff, RMS, peak audio level) so it's
+    // easy to tell "tiny FP noise" from "completely broken".
+    if (FILE *r = std::fopen("audio_regression_reference.raw", "rb")) {
+      std::vector<double> ref(numSamples);
+      const size_t n = std::fread(ref.data(), sizeof(double),
+                                  static_cast<size_t>(numSamples), r);
+      std::fclose(r);
+      if (n == static_cast<size_t>(numSamples)) {
+        double maxAbs = 0.0, sumSq = 0.0, refPeak = 0.0;
+        for (int i = 0; i < numSamples; i++) {
+          const double d = audio[i] - ref[i];
+          const double ad = d < 0.0 ? -d : d;
+          if (ad > maxAbs) maxAbs = ad;
+          sumSq += d * d;
+          const double a = audio[i] < 0.0 ? -audio[i] : audio[i];
+          if (a > refPeak) refPeak = a;
+        }
+        const double rms = std::sqrt(sumSq / numSamples);
+        std::printf("  drift vs audio_regression_reference.raw: "
+                    "max|d|=%.3e rms=%.3e (peak=%.3e)\n",
+                    maxAbs, rms, refPeak);
+      }
+    }
+
     // Drop the actual samples next to the test binary so the audible
     // difference can be inspected.
     if (FILE *f = std::fopen("audio_regression_actual.raw", "wb")) {
@@ -212,11 +238,39 @@ bool testGesturalScoreToAudio() {
 
 }  // namespace
 
-int main() {
+// One-shot helper: synthesize the gestural score and write the audio to
+// audio_regression_reference.raw so a subsequent run can quantify drift.
+static int dumpReference() {
+  int audioSr = 0, numTube = 0, numTract = 0, numGlottis = 0;
+  vtlGetConstants(&audioSr, &numTube, &numTract, &numGlottis);
+  std::vector<double> audio(static_cast<size_t>(audioSr) * 30);
+  int numSamples = static_cast<int>(audio.size());
+  if (vtlGesturalScoreToAudio(vtl_test::kGesturalScoreFile, "", "",
+                              audio.data(), &numSamples, 0, 0) != 0) {
+    return 2;
+  }
+  if (FILE *f = std::fopen("audio_regression_reference.raw", "wb")) {
+    std::fwrite(audio.data(), sizeof(double),
+                static_cast<size_t>(numSamples), f);
+    std::fclose(f);
+    std::printf("wrote audio_regression_reference.raw "
+                "(%d samples, float64 mono @ %d Hz)\n",
+                numSamples, audioSr);
+  }
+  return 0;
+}
+
+int main(int argc, char **argv) {
   if (vtlInitialize(vtl_test::kSpeakerFile) != 0) {
     std::fprintf(stderr, "vtlInitialize failed for %s\n",
                  vtl_test::kSpeakerFile);
     return 2;
+  }
+
+  if (argc > 1 && std::strcmp(argv[1], "--dump-reference") == 0) {
+    int rc = dumpReference();
+    vtlClose();
+    return rc;
   }
 
   bool ok = true;

@@ -19,6 +19,15 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   add_compile_options($<$<NOT:$<CONFIG:Debug>>:-fno-math-errno>)
 endif()
 
+# EXPERIMENT: -ffast-math lets the compiler reorder FP ops, fuse FMAs,
+# treat negative zero as zero, assume no NaN/Inf, etc. Big potential win
+# (vectorization, FMA, hoisting) but breaks bit-exact reproducibility.
+# Toggled below to measure cost vs benefit.
+option(VTL_ENABLE_FAST_MATH "Enable -ffast-math (changes FP results)" OFF)
+if(VTL_ENABLE_FAST_MATH AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  add_compile_options($<$<NOT:$<CONFIG:Debug>>:-ffast-math>)
+endif()
+
 # --- Link-time optimization -------------------------------------------------
 # Lets the linker inline across translation units, so e.g. tiny accessors
 # defined in a .cpp file (Point2D::normalize) get inlined at the hot call
