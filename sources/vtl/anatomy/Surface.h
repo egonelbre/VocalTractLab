@@ -246,6 +246,25 @@ private:
 
   void quickSort(int firstIndex, int lastIndex);
   bool getEdgeIntersection(int edgeIndex);
+
+  // Classify vertex v against the two offset cutting lines and store the
+  // -1/0/+1 side in vertexSide[v]. Lazy: short-circuits on cached results
+  // via vertexTested[v]. Inlined so it costs no more than the original
+  // inline classification block did.
+  inline void classifyVertexLazy(int v)
+  {
+    if (vertexTested[v]) return;
+    vertexTested[v] = 1;
+
+    const double vx = vertex[v].coord.x;
+    const double vy = vertex[v].coord.y;
+    const double dLeft  = (vx - leftLinePoint.x)  * lineVector.y - (vy - leftLinePoint.y)  * lineVector.x;
+    const double dRight = (vx - rightLinePoint.x) * lineVector.y - (vy - rightLinePoint.y) * lineVector.x;
+    int side = 0;
+    if (dLeft  < 0.0) side = -1;
+    if (dRight > 0.0) side = 1;
+    vertexSide[v] = (signed char)side;
+  }
 };
 
 // ****************************************************************************
