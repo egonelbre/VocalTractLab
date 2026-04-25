@@ -21,6 +21,7 @@ endif()
 # --- Sources ----------------------------------------------------------------
 
 set(GUI_DIR official/GUI/Developer)
+set(API_DIR official/API/Developer)
 
 set(BACKEND_SOURCES
   ${GUI_DIR}/Sources/Backend/AnatomyParams.cpp
@@ -166,4 +167,29 @@ if(APPLE)
   set_source_files_properties(${EXAMPLE_FILES} PROPERTIES
     MACOSX_PACKAGE_LOCATION "Resources/Examples"
   )
+endif()
+
+# --- VocalTractLabApi shared library ----------------------------------------
+
+set(API_SOURCES ${BACKEND_SOURCES})
+if(WIN32)
+  list(APPEND API_SOURCES ${API_DIR}/VocalTractLabApi.def)
+endif()
+
+add_library(VocalTractLabApi SHARED ${API_SOURCES})
+
+target_include_directories(VocalTractLabApi PRIVATE
+  ${GUI_DIR}/Sources/Backend
+)
+
+if(WIN32)
+  target_compile_definitions(VocalTractLabApi PRIVATE
+    _USRDLL
+    _USE_MATH_DEFINES
+    _CRT_SECURE_NO_WARNINGS
+  )
+  target_link_libraries(VocalTractLabApi PRIVATE winmm)
+else()
+  target_compile_definitions(VocalTractLabApi PRIVATE HAVE_OPENAL)
+  target_link_libraries(VocalTractLabApi PRIVATE OpenAL::OpenAL)
 endif()

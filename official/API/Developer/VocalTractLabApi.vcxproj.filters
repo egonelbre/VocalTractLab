@@ -11,204 +11,198 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Sources\AnatomyParams.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\AnatomyParams.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\Dsp.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\Dsp.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\F0EstimatorYin.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\F0EstimatorYin.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\Geometry.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\Geometry.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\GesturalScore.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\GesturalScore.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\Glottis.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\Glottis.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\IirFilter.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\IirFilter.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\LfPulse.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\LfPulse.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\Matrix2x2.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\Matrix2x2.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\PoleZeroPlan.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\PoleZeroPlan.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\Sampa.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\Sampa.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\SegmentSequence.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\SegmentSequence.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\Signal.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\Signal.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\SoundLib.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\SoundLib.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\Splines.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\Splines.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\StaticPhone.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\StaticPhone.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\Surface.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\Surface.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\TdsModel.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\TdsModel.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\TimeFunction.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\TimeFunction.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\TlModel.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\TlModel.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\TriangularGlottis.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\TriangularGlottis.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\Tube.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\Tube.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\VocalTract.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\VocalTract.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\VoiceQualityEstimator.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\VoiceQualityEstimator.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\XmlHelper.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\XmlHelper.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\XmlNode.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\XmlNode.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\VocalTractLabApi.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\VocalTractLabApi.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\Synthesizer.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\Synthesizer.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\Constants.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\Constants.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\GeometricGlottis2019.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\GeometricGlottis2019.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="Sources\GeometricGlottis2025.cpp">
+    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\GeometricGlottis2025.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Sources\AnatomyParams.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\AnatomyParams.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Ddc.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\AudioFile.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Dsp.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\Dsp.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Export.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\F0EstimatorYin.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\F0EstimatorYin.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\Geometry.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Geometry.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\GesturalScore.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\GesturalScore.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\Glottis.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Glottis.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\IirFilter.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\IirFilter.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\LfPulse.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\LfPulse.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\Matrix2x2.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Matrix2x2.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\PoleZeroPlan.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\PhysicalConstants.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\Sampa.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\PoleZeroPlan.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\SegmentSequence.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Sampa.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\Signal.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\SegmentSequence.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\SoundLib.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Signal.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\Splines.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\SoundLib.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\StaticPhone.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Splines.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\Surface.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\StaticPhone.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\TdsModel.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Surface.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\TimeFunction.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\TdsModel.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\TlModel.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\TimeFunction.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\TriangularGlottis.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\TlModel.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\Tube.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\TriangularGlottis.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\TubeSequence.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Tube.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\VocalTract.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\TubeSequence.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\VoiceQualityEstimator.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\VocalTract.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\XmlHelper.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\VoiceQualityEstimator.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\XmlNode.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\XmlHelper.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\VocalTractLabApi.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\XmlNode.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\Synthesizer.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\VocalTractLabApi.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\Constants.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Synthesizer.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\GeometricGlottis2019.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="Sources\Constants.h">
-      <Filter>Sources</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\GeometricGlottis2019.h">
-      <Filter>Sources</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\GeometricGlottis2025.h">
+    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\GeometricGlottis2025.h">
       <Filter>Sources</Filter>
     </ClInclude>
   </ItemGroup>
