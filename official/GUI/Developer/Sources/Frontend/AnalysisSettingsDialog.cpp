@@ -561,7 +561,7 @@ void AnalysisSettingsDialog::updateSpectrumPage()
 
   // Time step for average spectrum.
 
-  txtAverageSpectrumTimeStep->SetLabel( wxString::Format("%2.1f", data->averageSpectrumTimeStep_ms) );
+  txtAverageSpectrumTimeStep->ChangeValue( wxString::Format("%2.1f", data->averageSpectrumTimeStep_ms) );
 
   // Selection of the spectrum type.
 
@@ -633,8 +633,8 @@ void AnalysisSettingsDialog::updateSpectrogramPage()
 void AnalysisSettingsDialog::updateF0Page()
 {
   chkShowF0->SetValue( data->showF0 );
-  txtF0Threshold->SetLabel( wxString::Format("%2.2f", data->f0EstimatorYin->differenceFunctionThreshold) );
-  txtF0TimeStep->SetLabel( wxString::Format("%2.3f", data->f0EstimatorYin->timeStep_s) );
+  txtF0Threshold->ChangeValue( wxString::Format("%2.2f", data->f0EstimatorYin->differenceFunctionThreshold) );
+  txtF0TimeStep->ChangeValue( wxString::Format("%2.3f", data->f0EstimatorYin->timeStep_s) );
 }
 
 // ****************************************************************************

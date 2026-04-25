@@ -320,7 +320,7 @@ void VocalTractShapesDialog::outputShapeVars(int selection)
     // Deactivate all controls 
     for (i=0; i < VocalTract::NUM_PARAMS; i++)
     {
-      txtValue[i]->SetLabel("");
+      txtValue[i]->ChangeValue("");
       txtValue[i]->Disable();
     }
     return; 
@@ -348,7 +348,7 @@ void VocalTractShapesDialog::outputShapeVars(int selection)
       txtValue[i]->Disable();
     }
 
-    txtValue[i]->SetLabel( wxString::Format("%2.2f", s->param[i]) );
+    txtValue[i]->ChangeValue( wxString::Format("%2.2f", s->param[i]) );
   }
 }
 
