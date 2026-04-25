@@ -11,12 +11,19 @@ the upstream site: <https://www.vocaltractlab.de/>.
 
 ## Layout
 
-- `official/` — unmodified VTL 2.4 source tree (`API/`, `GUI/`, `license.txt`,
-  manual). The Visual Studio `.sln`/`.vcxproj` files in there remain the source
-  of truth for Windows developers.
-- `CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json` — cross-platform build for
-  the `VocalTractLab2` GUI executable, pulling sources from
-  `official/GUI/Developer/Sources/`.
+- `sources/` — C++ source tree (reorganized from the upstream `Sources/` flat
+  layout). Two top-level modules:
+  - `sources/vtl/` — the synthesizer library (the upstream "Backend"), grouped
+    into `api/`, `core/`, `dsp/`, `io/`, `phonetics/`, `anatomy/`, `glottis/`,
+    `acoustics/`, `synthesis/`, and `analysis/` layers.
+  - `sources/gui/` — the wxWidgets app (the upstream "Frontend"), grouped into
+    `app/`, `pages/`, `dialogs/`, `pictures/`, `graphing/`, and `util/`.
+- `official/` — upstream VTL 2.4 non-source assets: speakers, examples,
+  license, manual, and the legacy Visual Studio `.sln`/`.vcxproj` project
+  files (now pointing at the moved `sources/`).
+- `CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json` — cross-platform build
+  for the `VocalTractLab2` GUI executable and the `VocalTractLabApi` shared
+  library.
 - `third_party/vcpkg` — vendored vcpkg submodule that supplies wxWidgets and
   (on non-Windows) openal-soft.
 

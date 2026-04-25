@@ -20,96 +20,93 @@ endif()
 
 # --- Sources ----------------------------------------------------------------
 
-set(GUI_DIR official/GUI/Developer)
-set(API_DIR official/API/Developer)
-
-set(BACKEND_SOURCES
-  ${GUI_DIR}/Sources/Backend/acoustics/TdsModel.cpp
-  ${GUI_DIR}/Sources/Backend/acoustics/TlModel.cpp
-  ${GUI_DIR}/Sources/Backend/acoustics/Tube.cpp
-  ${GUI_DIR}/Sources/Backend/analysis/F0EstimatorYin.cpp
-  ${GUI_DIR}/Sources/Backend/analysis/PoleZeroPlan.cpp
-  ${GUI_DIR}/Sources/Backend/analysis/VoiceQualityEstimator.cpp
-  ${GUI_DIR}/Sources/Backend/anatomy/AnatomyParams.cpp
-  ${GUI_DIR}/Sources/Backend/anatomy/Splines.cpp
-  ${GUI_DIR}/Sources/Backend/anatomy/Surface.cpp
-  ${GUI_DIR}/Sources/Backend/anatomy/VocalTract.cpp
-  ${GUI_DIR}/Sources/Backend/api/VocalTractLabApi.cpp
-  ${GUI_DIR}/Sources/Backend/core/Constants.cpp
-  ${GUI_DIR}/Sources/Backend/core/Geometry.cpp
-  ${GUI_DIR}/Sources/Backend/core/Matrix2x2.cpp
-  ${GUI_DIR}/Sources/Backend/core/TimeFunction.cpp
-  ${GUI_DIR}/Sources/Backend/dsp/Dsp.cpp
-  ${GUI_DIR}/Sources/Backend/dsp/IirFilter.cpp
-  ${GUI_DIR}/Sources/Backend/dsp/Signal.cpp
-  ${GUI_DIR}/Sources/Backend/glottis/GeometricGlottis2019.cpp
-  ${GUI_DIR}/Sources/Backend/glottis/GeometricGlottis2025.cpp
-  ${GUI_DIR}/Sources/Backend/glottis/Glottis.cpp
-  ${GUI_DIR}/Sources/Backend/glottis/LfPulse.cpp
-  ${GUI_DIR}/Sources/Backend/glottis/TriangularGlottis.cpp
-  ${GUI_DIR}/Sources/Backend/io/SoundLib.cpp
-  ${GUI_DIR}/Sources/Backend/io/XmlHelper.cpp
-  ${GUI_DIR}/Sources/Backend/io/XmlNode.cpp
-  ${GUI_DIR}/Sources/Backend/phonetics/Sampa.cpp
-  ${GUI_DIR}/Sources/Backend/phonetics/SegmentSequence.cpp
-  ${GUI_DIR}/Sources/Backend/synthesis/GesturalScore.cpp
-  ${GUI_DIR}/Sources/Backend/synthesis/StaticPhone.cpp
-  ${GUI_DIR}/Sources/Backend/synthesis/Synthesizer.cpp
+set(VTL_SOURCES
+  sources/vtl/acoustics/TdsModel.cpp
+  sources/vtl/acoustics/TlModel.cpp
+  sources/vtl/acoustics/Tube.cpp
+  sources/vtl/analysis/F0EstimatorYin.cpp
+  sources/vtl/analysis/PoleZeroPlan.cpp
+  sources/vtl/analysis/VoiceQualityEstimator.cpp
+  sources/vtl/anatomy/AnatomyParams.cpp
+  sources/vtl/anatomy/Splines.cpp
+  sources/vtl/anatomy/Surface.cpp
+  sources/vtl/anatomy/VocalTract.cpp
+  sources/vtl/api/VocalTractLabApi.cpp
+  sources/vtl/core/Constants.cpp
+  sources/vtl/core/Geometry.cpp
+  sources/vtl/core/Matrix2x2.cpp
+  sources/vtl/core/TimeFunction.cpp
+  sources/vtl/dsp/Dsp.cpp
+  sources/vtl/dsp/IirFilter.cpp
+  sources/vtl/dsp/Signal.cpp
+  sources/vtl/glottis/GeometricGlottis2019.cpp
+  sources/vtl/glottis/GeometricGlottis2025.cpp
+  sources/vtl/glottis/Glottis.cpp
+  sources/vtl/glottis/LfPulse.cpp
+  sources/vtl/glottis/TriangularGlottis.cpp
+  sources/vtl/io/SoundLib.cpp
+  sources/vtl/io/XmlHelper.cpp
+  sources/vtl/io/XmlNode.cpp
+  sources/vtl/phonetics/Sampa.cpp
+  sources/vtl/phonetics/SegmentSequence.cpp
+  sources/vtl/synthesis/GesturalScore.cpp
+  sources/vtl/synthesis/StaticPhone.cpp
+  sources/vtl/synthesis/Synthesizer.cpp
 )
 
-set(FRONTEND_SOURCES
-  ${GUI_DIR}/Sources/Frontend/app/Application.cpp
-  ${GUI_DIR}/Sources/Frontend/app/Data.cpp
-  ${GUI_DIR}/Sources/Frontend/app/MainWindow.cpp
-  ${GUI_DIR}/Sources/Frontend/app/SynthesisThread.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/AnalysisResultsDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/AnalysisSettingsDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/AnatomyParamsDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/AnnotationDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/EmaConfigDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/FdsOptionsDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/FormantOptimizationDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/GlottisDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/GlottisPanel.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/LfPulseDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/PhoneticParamsDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/PoleZeroDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/SpectrumOptionsDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/TdsOptionsDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/TransitionDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/VocalTractDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/dialogs/VocalTractShapesDialog.cpp
-  ${GUI_DIR}/Sources/Frontend/graphing/ColorScale.cpp
-  ${GUI_DIR}/Sources/Frontend/graphing/Graph.cpp
-  ${GUI_DIR}/Sources/Frontend/graphing/SpectrogramPlot.cpp
-  ${GUI_DIR}/Sources/Frontend/pages/GesturalScorePage.cpp
-  ${GUI_DIR}/Sources/Frontend/pages/SignalPage.cpp
-  ${GUI_DIR}/Sources/Frontend/pages/TdsPage.cpp
-  ${GUI_DIR}/Sources/Frontend/pages/VocalTractPage.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/AreaFunctionPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/BasicPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/CrossSectionPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/GesturalScorePicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/GlottisPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/LfPulsePicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/PoleZeroPlot.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/SignalComparisonPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/SignalPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/SimpleSpectrumPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/SpectrogramPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/SpectrumPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/TdsSpatialSignalPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/TdsTimeSignalPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/TdsTubePicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/TimeAxisPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/pictures/VocalTractPicture.cpp
-  ${GUI_DIR}/Sources/Frontend/util/SilentMessageBox.cpp
+set(GUI_SOURCES
+  sources/gui/app/Application.cpp
+  sources/gui/app/Data.cpp
+  sources/gui/app/MainWindow.cpp
+  sources/gui/app/SynthesisThread.cpp
+  sources/gui/dialogs/AnalysisResultsDialog.cpp
+  sources/gui/dialogs/AnalysisSettingsDialog.cpp
+  sources/gui/dialogs/AnatomyParamsDialog.cpp
+  sources/gui/dialogs/AnnotationDialog.cpp
+  sources/gui/dialogs/EmaConfigDialog.cpp
+  sources/gui/dialogs/FdsOptionsDialog.cpp
+  sources/gui/dialogs/FormantOptimizationDialog.cpp
+  sources/gui/dialogs/GlottisDialog.cpp
+  sources/gui/dialogs/GlottisPanel.cpp
+  sources/gui/dialogs/LfPulseDialog.cpp
+  sources/gui/dialogs/PhoneticParamsDialog.cpp
+  sources/gui/dialogs/PoleZeroDialog.cpp
+  sources/gui/dialogs/SpectrumOptionsDialog.cpp
+  sources/gui/dialogs/TdsOptionsDialog.cpp
+  sources/gui/dialogs/TransitionDialog.cpp
+  sources/gui/dialogs/VocalTractDialog.cpp
+  sources/gui/dialogs/VocalTractShapesDialog.cpp
+  sources/gui/graphing/ColorScale.cpp
+  sources/gui/graphing/Graph.cpp
+  sources/gui/graphing/SpectrogramPlot.cpp
+  sources/gui/pages/GesturalScorePage.cpp
+  sources/gui/pages/SignalPage.cpp
+  sources/gui/pages/TdsPage.cpp
+  sources/gui/pages/VocalTractPage.cpp
+  sources/gui/pictures/AreaFunctionPicture.cpp
+  sources/gui/pictures/BasicPicture.cpp
+  sources/gui/pictures/CrossSectionPicture.cpp
+  sources/gui/pictures/GesturalScorePicture.cpp
+  sources/gui/pictures/GlottisPicture.cpp
+  sources/gui/pictures/LfPulsePicture.cpp
+  sources/gui/pictures/PoleZeroPlot.cpp
+  sources/gui/pictures/SignalComparisonPicture.cpp
+  sources/gui/pictures/SignalPicture.cpp
+  sources/gui/pictures/SimpleSpectrumPicture.cpp
+  sources/gui/pictures/SpectrogramPicture.cpp
+  sources/gui/pictures/SpectrumPicture.cpp
+  sources/gui/pictures/TdsSpatialSignalPicture.cpp
+  sources/gui/pictures/TdsTimeSignalPicture.cpp
+  sources/gui/pictures/TdsTubePicture.cpp
+  sources/gui/pictures/TimeAxisPicture.cpp
+  sources/gui/pictures/VocalTractPicture.cpp
+  sources/gui/util/SilentMessageBox.cpp
 )
 
-set(ALL_SOURCES ${BACKEND_SOURCES} ${FRONTEND_SOURCES})
+set(ALL_SOURCES ${VTL_SOURCES} ${GUI_SOURCES})
 
 if(WIN32)
-  list(APPEND ALL_SOURCES ${GUI_DIR}/VocalTractLab2.rc)
+  list(APPEND ALL_SOURCES official/GUI/Developer/VocalTractLab2.rc)
 endif()
 
 # --- Target -----------------------------------------------------------------
@@ -117,10 +114,10 @@ endif()
 add_executable(VocalTractLab2 WIN32 MACOSX_BUNDLE ${ALL_SOURCES})
 
 target_include_directories(VocalTractLab2 PRIVATE
-  ${GUI_DIR}/Sources
-  ${GUI_DIR}/Sources/Backend
-  ${GUI_DIR}/Sources/Frontend
-  ${GUI_DIR}
+  sources
+  sources/vtl
+  sources/gui
+  official/GUI/Developer
 )
 
 target_link_libraries(VocalTractLab2 PRIVATE ${wxWidgets_LIBRARIES})
@@ -172,16 +169,16 @@ endif()
 
 # --- VocalTractLabApi shared library ----------------------------------------
 
-set(API_SOURCES ${BACKEND_SOURCES})
+set(API_SOURCES ${VTL_SOURCES})
 if(WIN32)
-  list(APPEND API_SOURCES ${API_DIR}/VocalTractLabApi.def)
+  list(APPEND API_SOURCES official/API/Developer/VocalTractLabApi.def)
 endif()
 
 add_library(VocalTractLabApi SHARED ${API_SOURCES})
 
 target_include_directories(VocalTractLabApi PRIVATE
-  ${GUI_DIR}/Sources
-  ${GUI_DIR}/Sources/Backend
+  sources
+  sources/vtl
 )
 
 if(WIN32)

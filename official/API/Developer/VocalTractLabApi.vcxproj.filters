@@ -11,198 +11,198 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\anatomy\AnatomyParams.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\anatomy\AnatomyParams.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\dsp\Dsp.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\dsp\Dsp.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\analysis\F0EstimatorYin.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\analysis\F0EstimatorYin.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\core\Geometry.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\core\Geometry.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\synthesis\GesturalScore.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\synthesis\GesturalScore.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\glottis\Glottis.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\glottis\Glottis.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\dsp\IirFilter.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\dsp\IirFilter.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\glottis\LfPulse.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\glottis\LfPulse.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\core\Matrix2x2.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\core\Matrix2x2.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\analysis\PoleZeroPlan.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\analysis\PoleZeroPlan.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\phonetics\Sampa.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\phonetics\Sampa.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\phonetics\SegmentSequence.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\phonetics\SegmentSequence.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\dsp\Signal.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\dsp\Signal.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\io\SoundLib.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\io\SoundLib.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\anatomy\Splines.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\anatomy\Splines.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\synthesis\StaticPhone.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\synthesis\StaticPhone.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\anatomy\Surface.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\anatomy\Surface.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\acoustics\TdsModel.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\acoustics\TdsModel.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\core\TimeFunction.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\core\TimeFunction.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\acoustics\TlModel.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\acoustics\TlModel.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\glottis\TriangularGlottis.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\glottis\TriangularGlottis.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\acoustics\Tube.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\acoustics\Tube.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\anatomy\VocalTract.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\anatomy\VocalTract.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\analysis\VoiceQualityEstimator.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\analysis\VoiceQualityEstimator.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\io\XmlHelper.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\io\XmlHelper.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\io\XmlNode.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\io\XmlNode.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\api\VocalTractLabApi.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\api\VocalTractLabApi.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\synthesis\Synthesizer.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\synthesis\Synthesizer.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\core\Constants.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\core\Constants.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\glottis\GeometricGlottis2019.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\glottis\GeometricGlottis2019.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\GUI\Developer\Sources\Backend\glottis\GeometricGlottis2025.cpp">
+    <ClCompile Include="..\..\..\sources\vtl\glottis\GeometricGlottis2025.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\anatomy\AnatomyParams.h">
+    <ClInclude Include="..\..\..\sources\vtl\anatomy\AnatomyParams.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\io\AudioFile.h">
+    <ClInclude Include="..\..\..\sources\vtl\io\AudioFile.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\dsp\Dsp.h">
+    <ClInclude Include="..\..\..\sources\vtl\dsp\Dsp.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\analysis\F0EstimatorYin.h">
+    <ClInclude Include="..\..\..\sources\vtl\analysis\F0EstimatorYin.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\core\Geometry.h">
+    <ClInclude Include="..\..\..\sources\vtl\core\Geometry.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\synthesis\GesturalScore.h">
+    <ClInclude Include="..\..\..\sources\vtl\synthesis\GesturalScore.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\glottis\Glottis.h">
+    <ClInclude Include="..\..\..\sources\vtl\glottis\Glottis.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\dsp\IirFilter.h">
+    <ClInclude Include="..\..\..\sources\vtl\dsp\IirFilter.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\glottis\LfPulse.h">
+    <ClInclude Include="..\..\..\sources\vtl\glottis\LfPulse.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\core\Matrix2x2.h">
+    <ClInclude Include="..\..\..\sources\vtl\core\Matrix2x2.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\analysis\PoleZeroPlan.h">
+    <ClInclude Include="..\..\..\sources\vtl\analysis\PoleZeroPlan.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\phonetics\Sampa.h">
+    <ClInclude Include="..\..\..\sources\vtl\phonetics\Sampa.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\phonetics\SegmentSequence.h">
+    <ClInclude Include="..\..\..\sources\vtl\phonetics\SegmentSequence.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\dsp\Signal.h">
+    <ClInclude Include="..\..\..\sources\vtl\dsp\Signal.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\io\SoundLib.h">
+    <ClInclude Include="..\..\..\sources\vtl\io\SoundLib.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\anatomy\Splines.h">
+    <ClInclude Include="..\..\..\sources\vtl\anatomy\Splines.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\synthesis\StaticPhone.h">
+    <ClInclude Include="..\..\..\sources\vtl\synthesis\StaticPhone.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\anatomy\Surface.h">
+    <ClInclude Include="..\..\..\sources\vtl\anatomy\Surface.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\acoustics\TdsModel.h">
+    <ClInclude Include="..\..\..\sources\vtl\acoustics\TdsModel.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\core\TimeFunction.h">
+    <ClInclude Include="..\..\..\sources\vtl\core\TimeFunction.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\acoustics\TlModel.h">
+    <ClInclude Include="..\..\..\sources\vtl\acoustics\TlModel.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\glottis\TriangularGlottis.h">
+    <ClInclude Include="..\..\..\sources\vtl\glottis\TriangularGlottis.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\acoustics\Tube.h">
+    <ClInclude Include="..\..\..\sources\vtl\acoustics\Tube.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\acoustics\TubeSequence.h">
+    <ClInclude Include="..\..\..\sources\vtl\acoustics\TubeSequence.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\anatomy\VocalTract.h">
+    <ClInclude Include="..\..\..\sources\vtl\anatomy\VocalTract.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\analysis\VoiceQualityEstimator.h">
+    <ClInclude Include="..\..\..\sources\vtl\analysis\VoiceQualityEstimator.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\io\XmlHelper.h">
+    <ClInclude Include="..\..\..\sources\vtl\io\XmlHelper.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\io\XmlNode.h">
+    <ClInclude Include="..\..\..\sources\vtl\io\XmlNode.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\api\VocalTractLabApi.h">
+    <ClInclude Include="..\..\..\sources\vtl\api\VocalTractLabApi.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\synthesis\Synthesizer.h">
+    <ClInclude Include="..\..\..\sources\vtl\synthesis\Synthesizer.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\core\Constants.h">
+    <ClInclude Include="..\..\..\sources\vtl\core\Constants.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\glottis\GeometricGlottis2019.h">
+    <ClInclude Include="..\..\..\sources\vtl\glottis\GeometricGlottis2019.h">
       <Filter>Sources</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\GUI\Developer\Sources\Backend\glottis\GeometricGlottis2025.h">
+    <ClInclude Include="..\..\..\sources\vtl\glottis\GeometricGlottis2025.h">
       <Filter>Sources</Filter>
     </ClInclude>
   </ItemGroup>
