@@ -72,3 +72,55 @@ tract level).
   affected.
 - The benchmarks call `vtlInitialize()` exactly once per process (via a
   static fixture). Initialization time is not measured.
+
+## Profiling
+
+`tools/profile.sh` wraps Apple's `sample` command for quick CPU profiles:
+
+```sh
+tools/profile.sh BM_TractToTube              # default: 15 s of samples
+tools/profile.sh BM_SynthesisAddTube_Block 30
+```
+
+The script (re)builds `build/mac-relwithdebinfo/synthesis_bench` with debug
+info, runs the matching benchmark in the background, attaches `sample`, and
+prints the per-function flat profile. macOS-only — on Linux use
+`perf record / perf report`; on Windows use the VS profiler or VTune.
+
+### Where the time goes (M-series Mac, RelWithDebInfo)
+
+**`BM_TractToTube`** (~5 ms/call) — geometry-bound:
+
+| % | Function |
+|---:|---|
+| ~26% | `VocalTract::getCrossProfiles` |
+| ~21% | `Surface::getEdgeIntersection` |
+| ~16% | `Surface::prepareIntersection` |
+| ~9% | `Surface::getTriangleIntersection` |
+| ~7% | `VocalTract::insertLowerProfileLine` |
+| ~7% | `VocalTract::insertUpperProfileLine` |
+| ~7% | `Surface::getTriangleList` |
+
+**~75% of the call is in surface/triangle intersection geometry** —
+slicing the 3D vocal-tract surfaces (tongue, palate, lips, …) by the
+cutting planes that produce each cross-section profile. Speedup
+candidates: spatial acceleration structure for the triangle lookup
+(currently linear scan), SIMD on the inner intersection math, or
+amortizing — only re-running affected cross-sections when a parameter
+changes.
+
+**`BM_SynthesisAddTube_Block`** (~750 µs/block) — solver-bound:
+
+| % | Function |
+|---:|---|
+| ~46% | `TdsModel::solveEquationsCholesky` |
+| ~11% | `TdsModel::prepareTimeStep` |
+| ~7% | `TdsModel::calcNoiseSample` |
+| ~6% | `pow` (libm, scattered) |
+| ~5% | `TdsModel::calcMatrix` |
+| ~4% | `TdsModel::updateVariables` |
+
+**Almost half the budget is the per-step Cholesky solve** of the
+tube-section linear system. Speedup candidates: replace with a
+specialized banded/tridiagonal solver, vectorize the substitution
+loops, or reduce the internal oversampling rate.
