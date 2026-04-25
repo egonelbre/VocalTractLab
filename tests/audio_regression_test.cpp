@@ -76,15 +76,15 @@ bool checkInt(const char *label, long actual, long expected) {
 // Touches Surface intersection / cross-section profile code — the heaviest
 // area of recent optimization (dedup, merge, classify cache, etc).
 
-bool testTractToTube() {
-  std::printf("[TractToTube]\n");
-
+bool testTractToTubeOne(const char *vowel,
+                        uint64_t expectLen, uint64_t expectArea,
+                        uint64_t expectArtic, uint64_t expectScalars) {
   int audioSr = 0, numTube = 0, numTract = 0, numGlottis = 0;
   vtlGetConstants(&audioSr, &numTube, &numTract, &numGlottis);
 
   std::vector<double> tractParams(numTract);
-  if (vtlGetTractParams("a", tractParams.data()) != 0) {
-    std::printf("  vtlGetTractParams failed\n");
+  if (vtlGetTractParams(vowel, tractParams.data()) != 0) {
+    std::printf("  vtlGetTractParams(\"%s\") failed\n", vowel);
     return false;
   }
 
@@ -95,21 +95,44 @@ bool testTractToTube() {
   vtlTractToTube(tractParams.data(), tubeLength.data(), tubeArea.data(),
                  tubeArtic.data(), &incisorPos, &tongueTipSide, &velumOpening);
 
+  char buf[64];
   bool ok = true;
-  ok &= checkHash("tubeLength",
-                  hashSpan(tubeLength.data(), tubeLength.size()),
-                  0x9c3eb3f7bd934e29ULL);
-  ok &= checkHash("tubeArea",
-                  hashSpan(tubeArea.data(), tubeArea.size()),
-                  0x28aeb9b8e380bcf6ULL);
-  ok &= checkHash("tubeArtic",
-                  hashSpan(tubeArtic.data(), tubeArtic.size()),
-                  0xd289c032fb79e2f0ULL);
+  std::snprintf(buf, sizeof(buf), "tubeLength[%s]", vowel);
+  ok &= checkHash(buf, hashSpan(tubeLength.data(), tubeLength.size()), expectLen);
+  std::snprintf(buf, sizeof(buf), "tubeArea[%s]", vowel);
+  ok &= checkHash(buf, hashSpan(tubeArea.data(), tubeArea.size()), expectArea);
+  std::snprintf(buf, sizeof(buf), "tubeArtic[%s]", vowel);
+  ok &= checkHash(buf, hashSpan(tubeArtic.data(), tubeArtic.size()), expectArtic);
 
   const double scalars[3] = {incisorPos, velumOpening, tongueTipSide};
-  ok &= checkHash("scalars(incisor/velum/tip)",
-                  fnv1a(scalars, sizeof(scalars)),
-                  0xf11c011759609b07ULL);
+  std::snprintf(buf, sizeof(buf), "scalars[%s]", vowel);
+  ok &= checkHash(buf, fnv1a(scalars, sizeof(scalars)), expectScalars);
+  return ok;
+}
+
+bool testTractToTube() {
+  std::printf("[TractToTube]\n");
+  bool ok = true;
+  // Hashes captured from a pre-optimization build at d6227f4 (parent of
+  // the geometry-perf series). Each row exercises a different vocal-tract
+  // shape; "i" / "u" / "E" / "@" pull cuts through more cross-section
+  // profile slopes than "a" does, which is what initially exposed an
+  // FP-order bug in setupProfileLine.
+  ok &= testTractToTubeOne("a",
+      0x9c3eb3f7bd934e29ULL, 0x28aeb9b8e380bcf6ULL,
+      0xd289c032fb79e2f0ULL, 0xf11c011759609b07ULL);
+  ok &= testTractToTubeOne("i",
+      0x4fa15abc12cd70c5ULL, 0x408ea310c5165badULL,
+      0x58005d23a7ceec46ULL, 0xfcdf7c20a3f90908ULL);
+  ok &= testTractToTubeOne("u",
+      0x89e5469a144604adULL, 0x06a24a49042dc33dULL,
+      0xde7333aa62175bd3ULL, 0x60bbc5c00be86fa9ULL);
+  ok &= testTractToTubeOne("E",
+      0x719317183e820f1dULL, 0xdc98e9b5573c6cf2ULL,
+      0xb281d3ae1e6e58e3ULL, 0xee2c84b2a112c6faULL);
+  ok &= testTractToTubeOne("@",
+      0xb168814ba8d115ddULL, 0x21b7ebce9293390cULL,
+      0x45208a2b9fc703b5ULL, 0x2bf70ed00ae0b424ULL);
   return ok;
 }
 
@@ -171,7 +194,7 @@ bool testGesturalScoreToAudio() {
   ok &= checkInt("numSamples", numSamples, 108720);
   const uint64_t audioHash =
       hashSpan(audio.data(), static_cast<size_t>(numSamples));
-  if (!checkHash("audio samples", audioHash, 0xaf07347ccb6921f5ULL)) {
+  if (!checkHash("audio samples", audioHash, 0xcb0962f03ef5b19aULL)) {
     // Drop the actual samples next to the test binary so the audible
     // difference can be inspected.
     if (FILE *f = std::fopen("audio_regression_actual.raw", "wb")) {

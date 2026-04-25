@@ -6442,10 +6442,10 @@ void VocalTract::getCrossProfiles(Point2D P, Point2D v, double *upperProfile,
 namespace {
 struct ProfileLineSetup
 {
-  int    startI;
-  int    endI;
-  double y0;
-  double dy;
+  int    firstSample;  ///< Loop starts at firstSample + 1 (may be < 0).
+  int    lastSample;   ///< Loop ends at lastSample (may be >= N).
+  double y0;           ///< y at sample firstSample + 1.
+  double dy;           ///< y step per sample.
 };
 
 inline bool setupProfileLine(Point2D P0, Point2D P1, ProfileLineSetup &s)
@@ -6470,23 +6470,16 @@ inline bool setupProfileLine(Point2D P0, Point2D P1, ProfileLineSetup &s)
   P0 -= LENGTH_INC * v;
   P1 += LENGTH_INC * v;
 
-  const int firstSample = (int)(P0.x / VocalTract::PROFILE_SAMPLE_LENGTH);
-  const int lastSample  = (int)(P1.x / VocalTract::PROFILE_SAMPLE_LENGTH);
-  if (firstSample == lastSample) { return false; }
+  s.firstSample = (int)(P0.x / VocalTract::PROFILE_SAMPLE_LENGTH);
+  s.lastSample  = (int)(P1.x / VocalTract::PROFILE_SAMPLE_LENGTH);
+  if (s.firstSample == s.lastSample) { return false; }
 
-  const double dx_step = VocalTract::PROFILE_SAMPLE_LENGTH;
-  const double slope   = (P1.y - P0.y) / (P1.x - P0.x);
-
-  // Hoist the per-iteration `(i >= 0) && (i < N)` bounds check by clamping
-  // the loop range up front and advancing y0 to match the new start.
-  int rawStart = firstSample + 1;
-  int rawEnd   = lastSample;
-  s.startI = rawStart < 0 ? 0 : rawStart;
-  s.endI   = rawEnd >= VocalTract::NUM_PROFILE_SAMPLES ? VocalTract::NUM_PROFILE_SAMPLES - 1 : rawEnd;
-  if (s.startI > s.endI) { return false; }
-
-  s.dy = slope * dx_step;
-  s.y0 = P0.y + ((double)s.startI * dx_step - P0.x) * slope;
+  // Same operation order as the original three insertProfileLine functions
+  // so the per-sample y values are bit-identical (the audio regression test
+  // catches sub-ULP drift in this path).
+  const double dx = VocalTract::PROFILE_SAMPLE_LENGTH;
+  s.dy = (P1.y - P0.y) * dx / (P1.x - P0.x);
+  s.y0 = P0.y + ((s.firstSample + 1.0) * dx - P0.x) * s.dy / dx;
   return true;
 }
 } // namespace
@@ -6503,12 +6496,15 @@ void VocalTract::insertUpperProfileLine(Point2D P0, Point2D P1, int surfaceIndex
   if (!setupProfileLine(P0, P1, s)) { return; }
 
   double y = s.y0;
-  for (int i = s.startI; i <= s.endI; i++)
+  for (int i = s.firstSample + 1; i <= s.lastSample; i++)
   {
-    if ((y <= upperProfile[i]) && (y >= MIN_PROFILE_VALUE) && (y <= MAX_PROFILE_VALUE))
+    if ((i >= 0) && (i < NUM_PROFILE_SAMPLES))
     {
-      upperProfile[i] = y;
-      upperProfileSurface[i] = surfaceIndex;
+      if ((y <= upperProfile[i]) && (y >= MIN_PROFILE_VALUE) && (y <= MAX_PROFILE_VALUE))
+      {
+        upperProfile[i] = y;
+        upperProfileSurface[i] = surfaceIndex;
+      }
     }
     y += s.dy;
   }
@@ -6527,12 +6523,15 @@ void VocalTract::insertLowerProfileLine(Point2D P0, Point2D P1, int surfaceIndex
   if (!setupProfileLine(P0, P1, s)) { return; }
 
   double y = s.y0;
-  for (int i = s.startI; i <= s.endI; i++)
+  for (int i = s.firstSample + 1; i <= s.lastSample; i++)
   {
-    if ((y >= lowerProfile[i]) && (y >= MIN_PROFILE_VALUE) && (y <= MAX_PROFILE_VALUE))
+    if ((i >= 0) && (i < NUM_PROFILE_SAMPLES))
     {
-      lowerProfile[i] = y;
-      lowerProfileSurface[i] = surfaceIndex;
+      if ((y >= lowerProfile[i]) && (y >= MIN_PROFILE_VALUE) && (y <= MAX_PROFILE_VALUE))
+      {
+        lowerProfile[i] = y;
+        lowerProfileSurface[i] = surfaceIndex;
+      }
     }
     y += s.dy;
   }
@@ -6553,20 +6552,23 @@ void VocalTract::insertLowerCoverProfileLine(Point2D P0, Point2D P1, int surface
   if (!setupProfileLine(P0, P1, s)) { return; }
 
   double y = s.y0;
-  for (int i = s.startI; i <= s.endI; i++)
+  for (int i = s.firstSample + 1; i <= s.lastSample; i++)
   {
-    if ((y >= MIN_PROFILE_VALUE) && (y <= MAX_PROFILE_VALUE))
+    if ((i >= 0) && (i < NUM_PROFILE_SAMPLES))
     {
-      if (y >= lowerProfile[i])
+      if ((y >= MIN_PROFILE_VALUE) && (y <= MAX_PROFILE_VALUE))
       {
-        lowerProfile[i] = y;
-        lowerProfileSurface[i] = surfaceIndex;
-      }
-      // Insert into the upper profile only if it was not defined yet at this place.
-      if ((upperProfile[i] == EXTREME_PROFILE_VALUE) && (y <= upperProfile[i]))
-      {
-        upperProfile[i] = y;
-        upperProfileSurface[i] = surfaceIndex;
+        if (y >= lowerProfile[i])
+        {
+          lowerProfile[i] = y;
+          lowerProfileSurface[i] = surfaceIndex;
+        }
+        // Insert into the upper profile only if it was not defined yet at this place.
+        if ((upperProfile[i] == EXTREME_PROFILE_VALUE) && (y <= upperProfile[i]))
+        {
+          upperProfile[i] = y;
+          upperProfileSurface[i] = surfaceIndex;
+        }
       }
     }
     y += s.dy;
