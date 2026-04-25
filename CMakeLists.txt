@@ -9,6 +9,16 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# --- Math optimizations -----------------------------------------------------
+# -fno-math-errno tells the compiler the math library functions (sqrt, pow,
+# log, ...) don't set errno, so it can treat them as pure: hoist them out of
+# loops, CSE redundant calls, drop them when the result is unused. Safe in
+# practice — almost no real code reads errno after a math call. Worth ~1-3%
+# on math-heavy code and unlocks better autovectorization.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  add_compile_options($<$<NOT:$<CONFIG:Debug>>:-fno-math-errno>)
+endif()
+
 # --- Link-time optimization -------------------------------------------------
 # Lets the linker inline across translation units, so e.g. tiny accessors
 # defined in a .cpp file (Point2D::normalize) get inlined at the hot call
@@ -220,34 +230,47 @@ else()
 endif()
 
 # --- VocalTractLabApi shared library ----------------------------------------
+#
+# The vtl sources are compiled once into an OBJECT library and reused by both
+# the public shared library and (when enabled) the synthesis_bench executable.
+# Static-linking the .o files into the benchmark lets the linker inline across
+# the bench/API boundary, which dynamic linking through the .dylib blocks.
 
-set(API_SOURCES ${VTL_SOURCES})
-if(WIN32)
-  list(APPEND API_SOURCES sources/vtl/api/VocalTractLabApi.def)
-endif()
+add_library(VocalTractLabApiObj OBJECT ${VTL_SOURCES})
 
-add_library(VocalTractLabApi SHARED ${API_SOURCES})
-
-set_target_properties(VocalTractLabApi PROPERTIES
+set_target_properties(VocalTractLabApiObj PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
   INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
 )
 
-target_include_directories(VocalTractLabApi PRIVATE
+target_include_directories(VocalTractLabApiObj PUBLIC
   sources
   sources/vtl
 )
 
 if(WIN32)
-  target_compile_definitions(VocalTractLabApi PRIVATE
+  target_compile_definitions(VocalTractLabApiObj PRIVATE
     _USRDLL
     _USE_MATH_DEFINES
     _CRT_SECURE_NO_WARNINGS
   )
-  target_link_libraries(VocalTractLabApi PRIVATE winmm)
+  target_link_libraries(VocalTractLabApiObj PUBLIC winmm)
 else()
-  target_compile_definitions(VocalTractLabApi PRIVATE HAVE_OPENAL)
-  target_link_libraries(VocalTractLabApi PRIVATE OpenAL::OpenAL)
+  target_compile_definitions(VocalTractLabApiObj PUBLIC HAVE_OPENAL)
+  target_link_libraries(VocalTractLabApiObj PUBLIC OpenAL::OpenAL)
 endif()
+
+set(API_SHARED_SOURCES "")
+if(WIN32)
+  list(APPEND API_SHARED_SOURCES sources/vtl/api/VocalTractLabApi.def)
+endif()
+
+add_library(VocalTractLabApi SHARED ${API_SHARED_SOURCES} $<TARGET_OBJECTS:VocalTractLabApiObj>)
+target_link_libraries(VocalTractLabApi PRIVATE VocalTractLabApiObj)
+
+set_target_properties(VocalTractLabApi PROPERTIES
+  INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
+)
 
 # --- Benchmarks -------------------------------------------------------------
 # Microbenchmarks for the vtl synthesis pipeline. Use them to gauge how close
@@ -267,12 +290,20 @@ if(VTL_BUILD_BENCHMARKS)
     @ONLY
   )
 
-  add_executable(synthesis_bench benchmarks/synthesis_bench.cpp)
+  # Statically link the API object files into the benchmark so the linker
+  # can inline the API entry points (vtlSynthesisAddTube, ...) and the
+  # downstream call chain into the bench loop bodies. The .dylib boundary
+  # blocks LTO from doing this, which matters most for the fast-loop
+  # benchmarks (BM_SynthesisAddTube_Block).
+  add_executable(synthesis_bench
+    benchmarks/synthesis_bench.cpp
+    $<TARGET_OBJECTS:VocalTractLabApiObj>
+  )
   set_target_properties(synthesis_bench PROPERTIES
     INTERPROCEDURAL_OPTIMIZATION ${VTL_ENABLE_IPO}
   )
   target_link_libraries(synthesis_bench PRIVATE
-    VocalTractLabApi
+    VocalTractLabApiObj
     benchmark::benchmark
   )
   target_include_directories(synthesis_bench PRIVATE
