@@ -79,10 +79,9 @@ The build output lands in `build/<preset>/`:
 - macOS: `VocalTractLab2.app` with speaker files, `config.ini`,
   `example01.*`, vowel outline GIFs, and `Examples/` bundled into
   `Contents/Resources/`.
-- Linux / Windows: `VocalTractLab2` executable. Copy the contents of
-  `data/` (speakers, `config.ini`, example files, and the `batch/`
-  directory renamed to `Examples/`) next to the binary so it can find
-  `JD2.speaker`, `config.ini`, etc. at runtime.
+- Linux / Windows: `VocalTractLab2` executable. The build automatically
+  copies the `data/` tree next to the binary (`data/batch/` lands as
+  `Examples/`), so the executable is runnable in place.
 
 ## License
 

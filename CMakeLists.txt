@@ -130,6 +130,29 @@ if(NOT WIN32)
   target_link_libraries(VocalTractLab2 PRIVATE OpenAL::OpenAL)
 endif()
 
+# --- Runtime data staging ---------------------------------------------------
+#
+# Data::init resolves runtime files (speakers, config.ini, example01.*, the
+# vowel outline GIFs) at programPath — wxStandardPaths::GetExecutablePath() on
+# Linux/Windows, GetResourcesDir() on macOS. The batch tools additionally look
+# for an Examples/ subdirectory next to the binary. Stage the data/ tree into
+# the right place at build time so the binary is runnable in place.
+
+# Files to land flat next to the executable (relative to data/).
+set(RUNTIME_DATA_FILES
+  speakers/JD2.speaker
+  speakers/M01.speaker
+  speakers/W02.speaker
+  config.ini
+  example01-orig.wav
+  example01.ges
+  example01.seg
+  example01.tube
+  Vowel-a-outline.gif
+  Vowel-i-outline.gif
+  Vowel-u-outline.gif
+)
+
 if(APPLE)
   set_target_properties(VocalTractLab2 PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME          "VocalTractLab2"
@@ -139,34 +162,37 @@ if(APPLE)
     MACOSX_BUNDLE_ICON_FILE            "VocalTractLab2.icns"
   )
 
-  # Bundle speaker/config/example files into Contents/Resources/.
-  # Data::init uses wxStandardPaths::GetResourcesDir() on Apple, so the
-  # app resolves these at the same relative location the Windows build
-  # expects them next to the .exe.
-  set(BUNDLE_RESOURCE_FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/JD2.speaker"
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/M01.speaker"
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/W02.speaker"
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/config.ini"
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/example01-orig.wav"
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/example01.ges"
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/example01.seg"
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/example01.tube"
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/Vowel-a-outline.gif"
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/Vowel-i-outline.gif"
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/Vowel-u-outline.gif"
-  )
+  set(BUNDLE_RESOURCE_FILES "")
+  foreach(REL ${RUNTIME_DATA_FILES})
+    list(APPEND BUNDLE_RESOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/${REL}")
+  endforeach()
   target_sources(VocalTractLab2 PRIVATE ${BUNDLE_RESOURCE_FILES})
   set_source_files_properties(${BUNDLE_RESOURCE_FILES} PROPERTIES
     MACOSX_PACKAGE_LOCATION "Resources"
   )
 
-  # Mirror data/batch/ into Contents/Resources/Examples (the directory name
-  # the GUI's batch tools look for next to the executable).
   file(GLOB EXAMPLE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/batch/*")
   target_sources(VocalTractLab2 PRIVATE ${EXAMPLE_FILES})
   set_source_files_properties(${EXAMPLE_FILES} PROPERTIES
     MACOSX_PACKAGE_LOCATION "Resources/Examples"
+  )
+else()
+  # Linux/Windows: copy data files next to the built binary so it can be
+  # launched in place from build/<preset>/.
+  foreach(REL ${RUNTIME_DATA_FILES})
+    cmake_path(GET REL FILENAME BASENAME)
+    add_custom_command(TARGET VocalTractLab2 POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/data/${REL}"
+        "$<TARGET_FILE_DIR:VocalTractLab2>/${BASENAME}"
+      VERBATIM
+    )
+  endforeach()
+  add_custom_command(TARGET VocalTractLab2 POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+      "${CMAKE_CURRENT_SOURCE_DIR}/data/batch"
+      "$<TARGET_FILE_DIR:VocalTractLab2>/Examples"
+    VERBATIM
   )
 endif()
 
