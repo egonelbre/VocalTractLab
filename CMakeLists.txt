@@ -136,4 +136,34 @@ if(APPLE)
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
     MACOSX_BUNDLE_ICON_FILE            "VocalTractLab2.icns"
   )
+
+  # Bundle speaker/config/example files into Contents/Resources/.
+  # Data::init uses wxStandardPaths::GetResourcesDir() on Apple, so the
+  # app resolves these at the same relative location the Windows build
+  # expects them next to the .exe.
+  set(GUI_RESOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/official/GUI")
+  set(BUNDLE_RESOURCE_FILES
+    "${GUI_RESOURCE_DIR}/JD2.speaker"
+    "${GUI_RESOURCE_DIR}/M01.speaker"
+    "${GUI_RESOURCE_DIR}/W02.speaker"
+    "${GUI_RESOURCE_DIR}/config.ini"
+    "${GUI_RESOURCE_DIR}/example01-orig.wav"
+    "${GUI_RESOURCE_DIR}/example01.ges"
+    "${GUI_RESOURCE_DIR}/example01.seg"
+    "${GUI_RESOURCE_DIR}/example01.tube"
+    "${GUI_RESOURCE_DIR}/Vowel-a-outline.gif"
+    "${GUI_RESOURCE_DIR}/Vowel-i-outline.gif"
+    "${GUI_RESOURCE_DIR}/Vowel-u-outline.gif"
+  )
+  target_sources(VocalTractLab2 PRIVATE ${BUNDLE_RESOURCE_FILES})
+  set_source_files_properties(${BUNDLE_RESOURCE_FILES} PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources"
+  )
+
+  # Mirror the GUI/Examples directory into Contents/Resources/Examples.
+  file(GLOB EXAMPLE_FILES "${GUI_RESOURCE_DIR}/Examples/*")
+  target_sources(VocalTractLab2 PRIVATE ${EXAMPLE_FILES})
+  set_source_files_properties(${EXAMPLE_FILES} PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources/Examples"
+  )
 endif()

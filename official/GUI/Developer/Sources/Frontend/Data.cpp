@@ -99,8 +99,14 @@ void Data::init(const wxString &arg0)
   // terminated with a "\".
   // ****************************************************************
 
+#ifdef __APPLE__
+  // Inside an .app bundle, resource files live in Contents/Resources/
+  // rather than next to the executable at Contents/MacOS/.
+  programPath = wxStandardPaths::Get().GetResourcesDir() + wxFileName::GetPathSeparator();
+#else
   wxFileName fileName(arg0);
   programPath = fileName.GetPath(wxPATH_GET_VOLUME | wxPATH_GET_SEPARATOR);
+#endif
   wxPrintf("The program path is %s.\n", programPath.c_str());
 
   currentPage = NUM_PAGES;    // Invalid page
@@ -3569,7 +3575,7 @@ void Data::experiment1WallParameters(wxWindow *updateParent)
 //  const double REF_F0 = 101.0;
 //  const double REF_ABD = 0.9;
 
-  // Values for Speaker5 - Patrick Häsner:
+  // Values for Speaker5 - Patrick Hï¿½sner:
 //  const double REF_F0 = 127.0;
 //  const double REF_ABD = 0.3;
 
