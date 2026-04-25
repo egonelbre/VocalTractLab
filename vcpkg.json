@@ -6,6 +6,7 @@
     {
       "name": "openal-soft",
       "platform": "!windows"
-    }
+    },
+    "benchmark"
   ]
 }

@@ -1,0 +1,10 @@
+#pragma once
+
+namespace vtl_bench {
+
+constexpr const char* kSpeakerFile = "@CMAKE_CURRENT_SOURCE_DIR@/data/speakers/JD2.speaker";
+constexpr const char* kGesturalScoreFile = "@CMAKE_CURRENT_SOURCE_DIR@/data/example01.ges";
+constexpr int kAudioSampleRate = 48000;
+constexpr int kBlockSamples = 120; // 2.5 ms at 48 kHz — vtlSynthesisAddTube's natural step
+
+}  // namespace vtl_bench

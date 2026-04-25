@@ -23,6 +23,8 @@ the upstream site: <https://www.vocaltractlab.de/>.
   segment files for the batch tools.
 - `examples/` — API client demos. `matlab/` and `python/` show how to call
   the `VocalTractLabApi` shared library.
+- `benchmarks/` — Google-Benchmark microbenchmarks for the synthesis
+  pipeline (real-time-factor reporting). See [`benchmarks/README.md`](benchmarks/README.md).
 - `docs/` — manual and other documentation.
 - `CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json` — cross-platform build
   for the `VocalTractLab2` GUI executable and the `VocalTractLabApi` shared

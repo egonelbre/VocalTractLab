@@ -221,3 +221,32 @@ else()
   target_compile_definitions(VocalTractLabApi PRIVATE HAVE_OPENAL)
   target_link_libraries(VocalTractLabApi PRIVATE OpenAL::OpenAL)
 endif()
+
+# --- Benchmarks -------------------------------------------------------------
+# Microbenchmarks for the vtl synthesis pipeline. Use them to gauge how close
+# the backend is to real-time on a given platform / build configuration:
+#
+#   cmake --build --preset mac-debug --target synthesis_bench
+#   ./build/mac-debug/synthesis_bench --benchmark_min_time=2s
+
+option(VTL_BUILD_BENCHMARKS "Build the synthesis benchmarks" ON)
+
+if(VTL_BUILD_BENCHMARKS)
+  find_package(benchmark CONFIG REQUIRED)
+
+  configure_file(
+    benchmarks/benchmark_data.h.in
+    "${CMAKE_CURRENT_BINARY_DIR}/benchmarks/benchmark_data.h"
+    @ONLY
+  )
+
+  add_executable(synthesis_bench benchmarks/synthesis_bench.cpp)
+  target_link_libraries(synthesis_bench PRIVATE
+    VocalTractLabApi
+    benchmark::benchmark
+  )
+  target_include_directories(synthesis_bench PRIVATE
+    sources/vtl/api
+    "${CMAKE_CURRENT_BINARY_DIR}/benchmarks"
+  )
+endif()
