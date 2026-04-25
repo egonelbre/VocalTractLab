@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/TdsTubePicture.h"
+#include "util/Theme.h"
 #include "app/Data.h"
 #include <wx/tipwin.h>
 
@@ -109,8 +110,7 @@ void TdsTubePicture::draw(wxDC &dc)
   // Fill the background.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   // ****************************************************************
   // Paint the scales.
@@ -282,7 +282,7 @@ void TdsTubePicture::draw(wxDC &dc)
         rectH = 2*r;
 
         dc.SetBrush(color);
-        dc.SetPen(*wxBLACK_PEN);
+        dc.SetPen(Theme::fgPen());
         dc.DrawEllipse(rectX, rectY, rectW, rectH);
       }
       else
@@ -329,7 +329,7 @@ void TdsTubePicture::draw(wxDC &dc)
         }
 
         dc.SetBrush(color);
-        dc.SetPen(*wxBLACK_PEN);
+        dc.SetPen(Theme::fgPen());
         dc.DrawRectangle(rectX, rectY, rectW, rectH); 
 
         // **********************************************************
@@ -352,7 +352,7 @@ void TdsTubePicture::draw(wxDC &dc)
           dc.DrawLine(centerX, centerY, centerX, zeroY);
 
           dc.SetBrush( wxColor(255, 100, 100) );
-          dc.SetPen(*wxBLACK_PEN);
+          dc.SetPen(Theme::fgPen());
           dc.DrawCircle(centerX, centerY, radius);
         }
 
@@ -378,7 +378,7 @@ void TdsTubePicture::draw(wxDC &dc)
     dc.DrawLine(centerX, centerY, centerX, zeroY);
 
     dc.SetBrush( wxColor(255, 100, 100) );
-    dc.SetPen(*wxBLACK_PEN);
+    dc.SetPen(Theme::fgPen());
     dc.DrawCircle(centerX, centerY, radius);
   }
 
@@ -440,7 +440,7 @@ void TdsTubePicture::draw(wxDC &dc)
   triangle[2].y = teethY+8;
 
   dc.SetBrush( wxColor(255, 255, 128) );
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
   dc.DrawPolygon(3, triangle);
 
   // *********************************************************************

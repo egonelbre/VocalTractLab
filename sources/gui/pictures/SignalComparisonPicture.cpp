@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/SignalComparisonPicture.h"
+#include "util/Theme.h"
 #include "app/Data.h"
 #include "dialogs/AnalysisResultsDialog.h"
 #include "dialogs/AnnotationDialog.h"
@@ -216,8 +217,7 @@ void SignalComparisonPicture::paintSignals(wxDC &dc)
   int x, y;
 
   // Clear the background
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   int windowWidth, windowHeight;
   this->GetSize(&windowWidth, &windowHeight);
@@ -384,7 +384,7 @@ void SignalComparisonPicture::paintSignals(wxDC &dc)
   // Draw black lines separating the rows.
   // ****************************************************************
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
 
   for (i=0; i < NUM_ROWS; i++)
   {
@@ -529,7 +529,7 @@ void SignalComparisonPicture::paintOscillogram(wxDC &dc, int areaX, int areaY,
   int y;
   double yFactor = 2.3*areaHeight / 65536.0;
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
 
   rightIndex = firstSample;
 
@@ -637,7 +637,7 @@ void SignalComparisonPicture::paintPhoneSegmentation(wxDC &dc, int areaX, int ar
       }
       else
       {
-        dc.SetBrush(*wxWHITE_BRUSH);
+        dc.SetBrush(Theme::bgBrush());
       }
       dc.DrawRectangle(x1, areaY, x2 - x1 + 1, areaHeight);
     }
@@ -649,7 +649,7 @@ void SignalComparisonPicture::paintPhoneSegmentation(wxDC &dc, int areaX, int ar
   // Run through all phones.
   // ****************************************************************
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
   dc.SetFont(wxFont(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
 
   wxString st;
@@ -683,7 +683,7 @@ void SignalComparisonPicture::paintPhoneSegmentation(wxDC &dc, int areaX, int ar
         dc.SetPen(wxPen(*wxBLACK, 0, wxPENSTYLE_TRANSPARENT));
         dc.SetBrush( wxColor(255, 215, 0) );
         dc.DrawRectangle(x1, areaY, x2 - x1 + 1, areaHeight);
-        dc.SetPen(*wxBLACK_PEN);
+        dc.SetPen(Theme::fgPen());
       }
     }
     
@@ -804,7 +804,7 @@ void SignalComparisonPicture::paintWordSegmentation(wxDC &dc, int areaX, int are
       }
       else
       {
-        dc.SetBrush(*wxWHITE_BRUSH);
+        dc.SetBrush(Theme::bgBrush());
       }
 
       dc.DrawRectangle(x1, areaY, x2 - x1 + 1, areaHeight);
@@ -817,7 +817,7 @@ void SignalComparisonPicture::paintWordSegmentation(wxDC &dc, int areaX, int are
   // Run through all words.
   // ****************************************************************
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
   dc.SetFont(wxFont(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
 
   wxString st;
@@ -890,7 +890,7 @@ void SignalComparisonPicture::paintWordSegmentation(wxDC &dc, int areaX, int are
 void SignalComparisonPicture::paintPlayButton(wxDC &dc, int x, int y)
 {
   dc.SetBrush( wxColor(250, 250, 250) );
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
   dc.DrawRectangle(x, y, PLAY_BUTTON_WIDTH, PLAY_BUTTON_HEIGHT);
 
   wxPoint points[3] =
@@ -901,11 +901,11 @@ void SignalComparisonPicture::paintPlayButton(wxDC &dc, int x, int y)
   };
 
   dc.SetBrush( wxColor(210, 210, 210) );
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
 
   dc.DrawPolygon(3, points, x, y);
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
 }
 
 
@@ -920,8 +920,8 @@ void SignalComparisonPicture::drawSelectionMark(wxDC &dc, int x, int y1, int y2,
   dc.SetPen(wxPen(*wxBLACK, 1, wxPENSTYLE_DOT));
   dc.DrawLine(x, y1, x, y2);
 
-  dc.SetPen(*wxBLACK_PEN);
-  dc.SetBrush(*wxBLACK_BRUSH);
+  dc.SetPen(Theme::fgPen());
+  dc.SetBrush(Theme::fgBrush());
   const int W = 8;
 
   if (isLeftMark)

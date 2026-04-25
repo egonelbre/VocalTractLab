@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/LfPulsePicture.h"
+#include "util/Theme.h"
 #include "vtl/dsp/Signal.h"
 
 // ****************************************************************************
@@ -55,8 +56,7 @@ void LfPulsePicture::draw(wxDC &dc)
   // Fill the background.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   int width, height;
   this->GetSize(&width, &height);
@@ -71,7 +71,7 @@ void LfPulsePicture::draw(wxDC &dc)
   int y;
   int lastY;
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
 
   for (i=0; i < width; i++)
   {

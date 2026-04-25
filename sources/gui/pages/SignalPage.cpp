@@ -227,13 +227,17 @@ void SignalPage::initWidgets()
 
   wxSplitterWindow *splitter = new wxSplitterWindow(this, wxID_ANY, 
     wxDefaultPosition, wxDefaultSize, wxSP_3DSASH | wxSP_LIVE_UPDATE);
-  splitter->SetBackgroundColour(*wxWHITE); // If this is not set to white, every label will show up with a white background against the gray panels.
+  // Match the system window background so child labels read in both
+  // light and dark mode (the original code forced white).
+  splitter->SetBackgroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
 
   splitter->SetMinimumPaneSize(20);   // Pane size may not be reduced to zero!
 
-  wxSplitterWindow *subSplitter = new wxSplitterWindow(splitter, wxID_ANY, 
+  wxSplitterWindow *subSplitter = new wxSplitterWindow(splitter, wxID_ANY,
     wxDefaultPosition, wxDefaultSize, wxSP_NO_XP_THEME | wxSP_LIVE_UPDATE);
-  subSplitter->SetBackgroundColour(*wxWHITE); // If this is not set to white, every label will show up with a white background against the gray panels.
+  subSplitter->SetBackgroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
 
   subSplitter->SetMinimumPaneSize(20);   // Pane size may not be reduced to zero!
 

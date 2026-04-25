@@ -378,7 +378,11 @@ void VocalTractPage::initWidgets(VocalTractPicture *picVocalTract)
   splitter = new wxSplitterWindow(this, wxID_ANY,
     wxDefaultPosition, wxDefaultSize, wxSP_3DSASH | wxSP_LIVE_UPDATE);
 
-  splitter->SetBackgroundColour(*wxWHITE); // If this is not set to white, every label will show up with a white background against the gray panels.
+  // Match the system window background so child labels read in both
+  // light and dark mode (the original code forced white, which made
+  // labels invisible in dark mode).
+  splitter->SetBackgroundColour(
+      wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
   splitter->SetMinimumPaneSize(200);   // Pane size may not be reduced to zero!
 
   wxPanel *topPanel = new wxPanel(splitter, wxID_ANY, wxDefaultPosition, wxDefaultSize);

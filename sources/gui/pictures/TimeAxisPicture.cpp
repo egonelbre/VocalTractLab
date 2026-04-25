@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/TimeAxisPicture.h"
+#include "util/Theme.h"
 #include "app/Data.h"
 
 
@@ -55,8 +56,7 @@ void TimeAxisPicture::draw(wxDC &dc)
   // Fill the background and draw the graph.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
   graph->paintAbscissa(dc);
 }
 

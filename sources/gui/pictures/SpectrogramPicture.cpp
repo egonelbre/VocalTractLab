@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/SpectrogramPicture.h"
+#include "util/Theme.h"
 #include "dialogs/AnalysisResultsDialog.h"
 
 
@@ -132,7 +133,7 @@ void SpectrogramPicture::paintSpectrogram(wxDC &dc)
   int markX = (data->mark_pt - firstSample)*windowWidth / numSamples;
   if ((markX >= 0) && (markX < windowWidth))
   {
-    dc.SetPen(*wxBLACK_PEN);
+    dc.SetPen(Theme::fgPen());
     dc.DrawLine(markX, 0, markX, windowHeight-1);
   }
 
@@ -145,7 +146,7 @@ void SpectrogramPicture::paintSpectrogram(wxDC &dc)
     int w, h;
     wxString st;
 
-    dc.SetPen(*wxBLACK_PEN);
+    dc.SetPen(Theme::fgPen());
     dc.SetBackgroundMode(wxSOLID);    // Set a solid white background
     dc.SetFont(wxFont(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
 

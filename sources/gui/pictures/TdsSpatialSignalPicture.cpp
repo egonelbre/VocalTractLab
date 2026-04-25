@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/TdsSpatialSignalPicture.h"
+#include "util/Theme.h"
 #include "app/Data.h"
 
 
@@ -127,8 +128,7 @@ void TdsSpatialSignalPicture::draw(wxDC &dc)
   // Fill the background.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   // ****************************************************************
   // Paint the scales.
@@ -223,7 +223,7 @@ void TdsSpatialSignalPicture::draw(wxDC &dc)
       } 
       else 
       { 
-        dc.SetPen(*wxBLACK_PEN);
+        dc.SetPen(Theme::fgPen());
       }
 
       dc.DrawLine(leftX, leftY[i], rightX, rightY[i]);

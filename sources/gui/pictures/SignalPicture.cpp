@@ -20,17 +20,23 @@
 // ****************************************************************************
 
 #include "dialogs/AnalysisResultsDialog.h"
+#include "util/Theme.h"
 #include "pictures/SignalPicture.h"
 #include "app/Data.h"
 #include "vtl/dsp/Dsp.h"
 
 
-static const wxPen trackPen[Data::NUM_TRACKS] = 
-{
-  *wxBLACK_PEN,
-  wxPen( wxColor(0, 190, 0) ),
-  *wxRED_PEN
-};
+// Pen used to draw each oscillogram track. Built per-call so the main
+// (default) track follows the system text color and stays readable under
+// both light and dark themes.
+static wxPen trackPenFor(int track) {
+  switch (track) {
+    case 0: return Theme::fgPen();
+    case 1: return wxPen(wxColor(0, 190, 0));
+    case 2: return *wxRED_PEN;
+    default: return Theme::fgPen();
+  }
+}
 
 // ****************************************************************************
 // IDs.
@@ -170,8 +176,8 @@ void SignalPicture::drawSelectionMark(wxDC &dc, int x, int y1, int y2, bool isLe
   dc.SetPen(wxPen(*wxBLACK, 1, wxPENSTYLE_DOT));
   dc.DrawLine(x, y1, x, y2);
 
-  dc.SetPen(*wxBLACK_PEN);
-  dc.SetBrush(*wxBLACK_BRUSH);
+  dc.SetPen(Theme::fgPen());
+  dc.SetBrush(Theme::fgBrush());
   const int W = 8;
   
   if (isLeftMark)
@@ -211,7 +217,7 @@ void SignalPicture::paintUpperOscillogram(wxDC &dc, int w, int h)
   // Whole background is white.
   if (zeroX < 0)
   {
-    dc.SetBrush(*wxWHITE_BRUSH);
+    dc.SetBrush(Theme::bgBrush());
     dc.DrawRectangle(0, 0, w, h);
     // Set zeroX to zero!
     zeroX = 0;
@@ -227,7 +233,7 @@ void SignalPicture::paintUpperOscillogram(wxDC &dc, int w, int h)
     dc.SetBrush(*wxGREY_BRUSH);
     dc.DrawRectangle(0, 0, zeroX, h);
 
-    dc.SetBrush(*wxWHITE_BRUSH);
+    dc.SetBrush(Theme::bgBrush());
     dc.DrawRectangle(zeroX, 0, w-zeroX, h);
   }
 
@@ -303,7 +309,7 @@ void SignalPicture::paintUpperOscillogram(wxDC &dc, int w, int h)
 
         if (x > zeroX)
         {
-          dc.SetPen(trackPen[k]);
+          dc.SetPen(trackPenFor(k));
           dc.DrawLine(x-1, lastY[k], x, y);
         }
         lastY[k] = y;
@@ -330,7 +336,7 @@ void SignalPicture::paintUpperOscillogram(wxDC &dc, int w, int h)
   x = getXPos(data->mark_pt, true);
   if ((x >= 0) && (x < w))
   {
-    dc.SetPen(*wxBLACK_PEN);
+    dc.SetPen(Theme::fgPen());
     dc.DrawLine(x, 0, x, h-1);
   }
 
@@ -340,7 +346,7 @@ void SignalPicture::paintUpperOscillogram(wxDC &dc, int w, int h)
 
   if (data->showSpectrogramText)
   {
-    dc.SetPen(*wxBLACK_PEN);
+    dc.SetPen(Theme::fgPen());
     dc.SetBackgroundMode(wxSOLID);    // Set a solid white background
     dc.SetFont(wxFont(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
 
@@ -379,7 +385,7 @@ void SignalPicture::paintUpperOscillogram(wxDC &dc, int w, int h)
 
   // Horizontal black line at the bottom to sepearate the smaller osc.
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
   dc.DrawLine(0, h-1, w-1, h-1); 
 }
 
@@ -437,13 +443,13 @@ void SignalPicture::paintLowerOscillogram(wxDC &dc, int yOffset, int w, int h)
     leftX = zeroX;
   }
 
-  dc.SetBrush(*wxWHITE_BRUSH);
+  dc.SetBrush(Theme::bgBrush());
   dc.DrawRectangle(leftX, yOffset, rightX - leftX, h);
 
   // Horizontal center line
   if (data->showSpectrogramText) 
   { 
-    dc.SetPen(*wxWHITE_PEN);
+    dc.SetPen(Theme::bgPen());
     dc.DrawLine(zeroX, yOffset + h/2, w-1, yOffset + h/2); 
   }
 
@@ -512,7 +518,7 @@ void SignalPicture::paintLowerOscillogram(wxDC &dc, int yOffset, int w, int h)
 
         if (x > zeroX)
         {
-          dc.SetPen(trackPen[k]);
+          dc.SetPen(trackPenFor(k));
           dc.DrawLine(lastX, lastY[k], x, y);
         }
 
@@ -542,7 +548,7 @@ void SignalPicture::paintLowerOscillogram(wxDC &dc, int yOffset, int w, int h)
   x = ((data->mark_pt - startPos)*w) / numSamples;
   if ((x >= 0) && (x < w))
   {
-    dc.SetPen(*wxBLACK_PEN);
+    dc.SetPen(Theme::fgPen());
     dc.DrawLine(x, yOffset, x, yOffset+h-1);
   }
 

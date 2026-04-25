@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/AreaFunctionPicture.h"
+#include "util/Theme.h"
 #include "dialogs/VocalTractDialog.h"
 #include "app/Data.h"
 
@@ -124,8 +125,7 @@ void AreaFunctionPicture::draw(wxDC &dc)
   // Fill the background.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   // ****************************************************************
   // Find the beginning and ending location of the area function.
@@ -212,7 +212,7 @@ void AreaFunctionPicture::draw(wxDC &dc)
       dc.SetBrush(*wxLIGHT_GREY_BRUSH);
       dc.DrawRectangle(x[0], y, x[1]-x[0]+1, graphY+graphH-y);
 
-      dc.SetPen(*wxBLACK_PEN);
+      dc.SetPen(Theme::fgPen());
       if (i > 0) 
       { 
         dc.DrawLine(x[0], lastY, x[0], y); 
@@ -240,7 +240,7 @@ void AreaFunctionPicture::draw(wxDC &dc)
       dc.SetBrush(*wxLIGHT_GREY_BRUSH);
       dc.DrawRectangle(x[0], y, x[1]-x[0]+1, graphY+graphH-y);
 
-      dc.SetPen(*wxBLACK_PEN);
+      dc.SetPen(Theme::fgPen());
       if (i > 0) 
       { 
         dc.DrawLine(x[0], lastY, x[0], y); 
@@ -271,7 +271,7 @@ void AreaFunctionPicture::draw(wxDC &dc)
         y = graph->getYPos(TlModel::getCircumference(ts->area_cm2));
       }
 
-      dc.SetPen(*wxBLACK_PEN);
+      dc.SetPen(Theme::fgPen());
       if (i > 0) 
       { 
         dc.DrawLine(x[0], lastY, x[0], y); 
@@ -311,7 +311,7 @@ void AreaFunctionPicture::draw(wxDC &dc)
         y[1] = graph->getYPos(tract->crossSection[i + 1].circ);
       }
 
-      dc.SetPen(*wxBLACK_PEN);
+      dc.SetPen(Theme::fgPen());
       dc.DrawLine(x[0], y[0], x[1], y[1]);
 
       // Determine the area at the cutting position
@@ -360,7 +360,7 @@ void AreaFunctionPicture::draw(wxDC &dc)
   {
     wxString st;
 
-    dc.SetPen(*wxBLACK_PEN);
+    dc.SetPen(Theme::fgPen());
     dc.SetFont(wxFont(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
 
     st = wxString::Format("Length: %2.2f cm", tract->centerLineLength);

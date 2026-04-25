@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/SimpleSpectrumPicture.h"
+#include "util/Theme.h"
 
 // ****************************************************************************
 // The event table.
@@ -97,8 +98,7 @@ void SimpleSpectrumPicture::draw(wxDC &dc)
   // Fill the background.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   // Draw a frequency or time function
   drawFunction(dc);
@@ -180,7 +180,7 @@ void SimpleSpectrumPicture::drawFunction(wxDC &dc)
     double w;
     double value;
 
-    dc.SetPen(*wxBLACK_PEN);
+    dc.SetPen(Theme::fgPen());
 
     for (i=0; i < graphW; i++)
     {
@@ -215,7 +215,7 @@ void SimpleSpectrumPicture::drawFunction(wxDC &dc)
     double w;
     double value;
 
-    dc.SetPen(*wxBLACK_PEN);
+    dc.SetPen(Theme::fgPen());
 
     for (i=0; i < graphW; i++)
     {

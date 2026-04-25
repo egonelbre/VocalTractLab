@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/GlottisPicture.h"
+#include "util/Theme.h"
 #include <typeinfo>
 
 
@@ -55,8 +56,7 @@ void GlottisPicture::draw(wxDC &dc)
   }
   else
   {
-    dc.SetBackground(*wxWHITE_BRUSH);
-    dc.Clear();
+    Theme::clearAndPrepareDc(dc);
     dc.DrawText("Unknown glottis type!", 0, 0);
   }
 }
@@ -72,8 +72,7 @@ void GlottisPicture::drawGeometricGlottis2025(wxDC &dc)
   // Fill the background.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   // ****************************************************************
   // Initialize the viewport.
@@ -194,7 +193,7 @@ void GlottisPicture::drawGeometricGlottis2025(wxDC &dc)
 
   // Draw the outline of the glottis
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
   drawLines(dc, NUM_EDGE_POINTS, lowerLeftEdge);
   drawLines(dc, NUM_EDGE_POINTS, lowerRightEdge);
   drawLines(dc, NUM_EDGE_POINTS, upperLeftEdge);
@@ -264,7 +263,7 @@ void GlottisPicture::drawGeometricGlottis2025(wxDC &dc)
 
   // Draw the outline of the chink
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
 
   drawLines(dc, NUM_CHINK_POINTS, chinkTop);
   drawLine(dc, -endX[1], 0.0, -length, chinkTop[0].x, chinkTop[0].y, chinkTop[0].z);
@@ -286,8 +285,7 @@ void GlottisPicture::drawGeometricGlottis2019(wxDC& dc)
   // Fill the background.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   // ****************************************************************
   // Initialize the viewport.
@@ -408,7 +406,7 @@ void GlottisPicture::drawGeometricGlottis2019(wxDC& dc)
 
   // Draw the outline of the glottis
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
   drawLines(dc, NUM_EDGE_POINTS, lowerLeftEdge);
   drawLines(dc, NUM_EDGE_POINTS, lowerRightEdge);
   drawLines(dc, NUM_EDGE_POINTS, upperLeftEdge);
@@ -478,7 +476,7 @@ void GlottisPicture::drawGeometricGlottis2019(wxDC& dc)
 
   // Draw the outline of the chink
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
 
   drawLines(dc, NUM_CHINK_POINTS, chinkTop);
   drawLine(dc, -endX[1], 0.0, -length, chinkTop[0].x, chinkTop[0].y, chinkTop[0].z);
@@ -500,8 +498,7 @@ void GlottisPicture::drawTriangularGlottis(wxDC &dc)
   // Fill the background.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   // ****************************************************************
   // Initialize the viewport.
@@ -677,8 +674,8 @@ void GlottisPicture::drawTriangularGlottis(wxDC &dc)
 
   // Draw left lower mass
   
-  dc.SetPen(*wxBLACK_PEN);
-  dc.SetBrush(*wxWHITE_BRUSH);
+  dc.SetPen(Theme::fgPen());
+  dc.SetBrush(Theme::bgBrush());
 
   drawPolygon(dc, 4, lowerFrontalPlane, -W-backX[0], 0.0, 0.0);
   drawPolygon(dc, 4, lowerLeftSagittalPlane);
@@ -686,8 +683,8 @@ void GlottisPicture::drawTriangularGlottis(wxDC &dc)
 
   // Draw right lower mass
   
-  dc.SetPen(*wxBLACK_PEN);
-  dc.SetBrush(*wxWHITE_BRUSH);
+  dc.SetPen(Theme::fgPen());
+  dc.SetBrush(Theme::bgBrush());
 
   drawPolygon(dc, 4, lowerFrontalPlane, backX[0], 0.0, 0.0);
   drawPolygon(dc, 4, lowerRightSagittalPlane);
@@ -752,8 +749,8 @@ void GlottisPicture::drawTriangularGlottis(wxDC &dc)
 
   // Draw left upper mass
   
-  dc.SetPen(*wxBLACK_PEN);
-  dc.SetBrush(*wxWHITE_BRUSH);
+  dc.SetPen(Theme::fgPen());
+  dc.SetBrush(Theme::bgBrush());
 
   drawPolygon(dc, 4, upperFrontalPlane, -W-backX[1], 0.0, 0.0);
   drawPolygon(dc, 4, upperLeftSagittalPlane);
@@ -761,8 +758,8 @@ void GlottisPicture::drawTriangularGlottis(wxDC &dc)
 
   // Draw right upper mass
   
-  dc.SetPen(*wxBLACK_PEN);
-  dc.SetBrush(*wxWHITE_BRUSH);
+  dc.SetPen(Theme::fgPen());
+  dc.SetBrush(Theme::bgBrush());
 
   drawPolygon(dc, 4, upperFrontalPlane, backX[1], 0.0, 0.0);
   drawPolygon(dc, 4, upperRightSagittalPlane);

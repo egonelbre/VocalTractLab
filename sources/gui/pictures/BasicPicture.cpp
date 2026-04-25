@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/BasicPicture.h"
+#include "util/Theme.h"
 
 
 // ****************************************************************************
@@ -63,10 +64,10 @@ void BasicPicture::draw(wxDC &dc)
   int w, h;
   this->GetSize(&w, &h);
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
   dc.DrawLine(0, 0, w-1, h-1);
 
-  dc.SetPen(*wxWHITE_PEN);
+  dc.SetPen(Theme::bgPen());
   dc.DrawLine(w-1, 0, 0, h-1);
 }
 

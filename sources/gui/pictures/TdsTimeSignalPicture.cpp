@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/TdsTimeSignalPicture.h"
+#include "util/Theme.h"
 #include "app/Data.h"
 
 
@@ -123,8 +124,7 @@ void TdsTimeSignalPicture::draw(wxDC &dc)
   // Fill the background.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   // ****************************************************************
   // Paint the scales.
@@ -201,7 +201,7 @@ void TdsTimeSignalPicture::draw(wxDC &dc)
     buffer = data->synthesizer->userProbeVelocity;
   }
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
 
   for (i=0; i < graphW; i++)
   {

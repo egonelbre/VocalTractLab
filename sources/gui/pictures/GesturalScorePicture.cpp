@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/GesturalScorePicture.h"
+#include "util/Theme.h"
 #include "dialogs/AnalysisResultsDialog.h"
 #include "app/Data.h"
 #include <wx/busyinfo.h>
@@ -209,8 +210,7 @@ void GesturalScorePicture::paintGesturalScore(wxDC &dc)
   // Clear the background
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   // ****************************************************************
   // Draw the labels for the gestures left next to the rows.
@@ -313,7 +313,7 @@ void GesturalScorePicture::paintGesturalScore(wxDC &dc)
           else
           if (gesture->neutral)
           {
-            dc.SetBrush(*wxWHITE_BRUSH);
+            dc.SetBrush(Theme::bgBrush());
           }
           else
           {
@@ -349,7 +349,7 @@ void GesturalScorePicture::paintGesturalScore(wxDC &dc)
       // the gesture values.
       // ************************************************************
 
-      dc.SetPen(*wxBLACK_PEN);
+      dc.SetPen(Theme::fgPen());
       dc.SetFont(wxFont(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
 
       startTime_s = 0.0;
@@ -472,7 +472,7 @@ void GesturalScorePicture::paintGesturalScore(wxDC &dc)
   int index;
   double pos_s;
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
 
   // Run through all pixels from left to right.
 
@@ -525,7 +525,7 @@ void GesturalScorePicture::paintGesturalScore(wxDC &dc)
   // Draw black lines separating the rows.
   // ****************************************************************
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
 
   for (i=0; i < N; i++)
   {
@@ -593,8 +593,7 @@ void GesturalScorePicture::paintMotorProgram(wxDC &dc)
   // Clear the background.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   // ****************************************************************
   // Get the min and max values of all parameters.
@@ -719,7 +718,7 @@ void GesturalScorePicture::paintMotorProgram(wxDC &dc)
   double params[MAX_PARAMS];
   int prevY[MAX_PARAMS] = { 0 };
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
 
   // Run through all pixels from left to right.
 
@@ -791,7 +790,7 @@ void GesturalScorePicture::paintMotorProgram(wxDC &dc)
   // Draw black lines separating the rows.
   // ****************************************************************
 
-  dc.SetPen(*wxBLACK_PEN);
+  dc.SetPen(Theme::fgPen());
 
   for (i=0; i < N; i++)
   {

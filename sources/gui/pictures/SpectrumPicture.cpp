@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include "pictures/SpectrumPicture.h"
+#include "util/Theme.h"
 #include "app/Data.h"
 #include "dialogs/SpectrumOptionsDialog.h"
 #include "util/SilentMessageBox.h"
@@ -137,8 +138,7 @@ void SpectrumPicture::draw(wxDC &dc)
   // Clear the background and paint the axes.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
   graph.paintAbscissa(dc);
   graph.paintOrdinate(dc);
 
@@ -149,21 +149,21 @@ void SpectrumPicture::draw(wxDC &dc)
     double y[5];
     wxPen linePen(*wxLIGHT_GREY, 1, wxPENSTYLE_SHORT_DASH);
 
-    dc.SetPen(*wxBLACK_PEN);
+    dc.SetPen(Theme::fgPen());
     dc.DrawLine(graphX + graphW, graphY, graphX + graphW, graphY + graphH);
 
     for (i=0; i < 5; i++) 
     { 
       y[i] = graphY + graphH - 1 - 0.25*graphH*i; 
 
-      dc.SetPen(*wxBLACK_PEN);
+      dc.SetPen(Theme::fgPen());
       dc.DrawLine(graphX + graphW, (int)y[i], graphX + graphW + 6, (int)y[i]);
       
       dc.SetPen(linePen);
       dc.DrawLine(graphX, (int)y[i], graphX + graphW - 1, (int)y[i]);
     }
 
-    dc.SetPen(*wxBLACK_PEN);
+    dc.SetPen(Theme::fgPen());
     dc.SetFont(wxFont(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
 
     dc.DrawText("Pi",    graphX + graphW + 8, y[4] + 1);

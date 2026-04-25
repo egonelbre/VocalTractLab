@@ -20,6 +20,7 @@
 // ****************************************************************************
 
 #include <limits>
+#include "util/Theme.h"
 #include "pictures/PoleZeroPlot.h"
 
 // ****************************************************************************
@@ -111,8 +112,7 @@ void PoleZeroPlot::draw(wxDC &dc)
   // Fill the background and draw the graph.
   // ****************************************************************
 
-  dc.SetBackground(*wxWHITE_BRUSH);
-  dc.Clear();
+  Theme::clearAndPrepareDc(dc);
 
   graph.paintAbscissa(dc);
   graph.paintOrdinate(dc);
