@@ -89,6 +89,6 @@ is provided as a portable alternative.
 ## License
 
 VocalTractLab is licensed under the GNU General Public License v3.0 — see
-[`official/license.txt`](official/license.txt). All credit for the underlying
+[`LICENSE`](LICENSE). All credit for the underlying
 synthesizer goes to Peter Birkholz and the contributors listed in the source
 file headers.
