@@ -116,7 +116,10 @@ void frameTick() {
   int displayW, displayH;
   glfwGetFramebufferSize(window, &displayW, &displayH);
   glViewport(0, 0, displayW, displayH);
-  glClearColor(0.93f, 0.93f, 0.95f, 1.0f);
+  // Clear to the active ImGui WindowBg so the area behind the dockspace
+  // (visible briefly while panels are dragged) blends with the theme.
+  ImVec4 bg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+  glClearColor(bg.x, bg.y, bg.z, bg.w);
   glClear(GL_COLOR_BUFFER_BIT);
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
   glfwSwapBuffers(window);
@@ -175,7 +178,9 @@ int main(int argc, char** argv) {
   ImGuiIO& io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-  ImGui::StyleColorsLight();
+  // Dark by default; the panels read colors back through GetColorU32 so
+  // switching to StyleColorsLight()/StyleColorsClassic() works too.
+  ImGui::StyleColorsDark();
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init(glslVersion);
 

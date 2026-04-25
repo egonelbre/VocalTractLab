@@ -32,10 +32,13 @@ void drawStrip(ImDrawList* dl, const std::vector<ImVec2>& pts, ImU32 color,
 // the tongue mediosagittal contour, the dashed tongue circle, the teeth,
 // and the lips.
 void drawOutline(ImDrawList* dl, VocalTract* tract, const TractView& view) {
-  const ImU32 colBlack = IM_COL32(20, 20, 20, 255);
+  // Hard-structure outlines follow the active text color so they invert
+  // automatically between light and dark themes. Soft tissue (tongue, lips)
+  // stays a warm coral red, which reads on either background.
+  const ImU32 colMain = ImGui::GetColorU32(ImGuiCol_Text);
+  const ImU32 colTongueSide = ImGui::GetColorU32(ImGuiCol_Text, 0.55f);
+  const ImU32 colDashed = ImGui::GetColorU32(ImGuiCol_Text, 0.40f);
   const ImU32 colTongue = IM_COL32(220, 80, 60, 255);
-  const ImU32 colTongueSide = IM_COL32(200, 200, 200, 255);
-  const ImU32 colDashed = IM_COL32(120, 120, 120, 255);
   const ImU32 colLip = IM_COL32(220, 80, 60, 255);
   const float thickThin = 1.0f;
   const float thickMain = 1.6f;
@@ -69,7 +72,7 @@ void drawOutline(ImDrawList* dl, VocalTract* tract, const TractView& view) {
     Point3D q = s->getVertex(i, ribPoint);
     appendVertex(pts, view, q.x, q.y);
   }
-  drawStrip(dl, pts, colBlack, thickMain);
+  drawStrip(dl, pts, colMain, thickMain);
 
   // Lower cover with epiglottis inserted.
   pts.clear();
@@ -96,7 +99,7 @@ void drawOutline(ImDrawList* dl, VocalTract* tract, const TractView& view) {
     Point3D q = s->getVertex(i, ribPoint);
     appendVertex(pts, view, q.x, q.y);
   }
-  drawStrip(dl, pts, colBlack, thickMain);
+  drawStrip(dl, pts, colMain, thickMain);
 
   // Tongue mediosagittal contour.
   pts.clear();
@@ -158,7 +161,7 @@ void drawOutline(ImDrawList* dl, VocalTract* tract, const TractView& view) {
     Point3D q = s->getVertex(i, ribPoint);
     appendVertex(pts, view, q.x, q.y);
   }
-  drawStrip(dl, pts, colBlack, thickThin);
+  drawStrip(dl, pts, colMain, thickThin);
 
   pts.clear();
   ribPoint = 2;
@@ -166,21 +169,21 @@ void drawOutline(ImDrawList* dl, VocalTract* tract, const TractView& view) {
     Point3D q = s->getVertex(i, ribPoint);
     appendVertex(pts, view, q.x, q.y);
   }
-  drawStrip(dl, pts, colBlack, thickThin);
+  drawStrip(dl, pts, colMain, thickThin);
 
   pts.clear();
   for (int i = 0; i < 2; ++i) {
     Point3D q = s->getVertex(0, i);
     appendVertex(pts, view, q.x, q.y);
   }
-  drawStrip(dl, pts, colBlack, thickThin);
+  drawStrip(dl, pts, colMain, thickThin);
 
   pts.clear();
   for (int i = 0; i < s->numRibPoints; ++i) {
     Point3D q = s->getVertex(s->numRibs - 2, i);
     appendVertex(pts, view, q.x, q.y);
   }
-  drawStrip(dl, pts, colBlack, thickThin);
+  drawStrip(dl, pts, colMain, thickThin);
 
   // Lower teeth.
   s = &tract->surfaces[VocalTract::LOWER_TEETH];
@@ -190,7 +193,7 @@ void drawOutline(ImDrawList* dl, VocalTract* tract, const TractView& view) {
     Point3D q = s->getVertex(i, ribPoint);
     appendVertex(pts, view, q.x, q.y);
   }
-  drawStrip(dl, pts, colBlack, thickThin);
+  drawStrip(dl, pts, colMain, thickThin);
 
   pts.clear();
   ribPoint = 2;
@@ -198,21 +201,21 @@ void drawOutline(ImDrawList* dl, VocalTract* tract, const TractView& view) {
     Point3D q = s->getVertex(i, ribPoint);
     appendVertex(pts, view, q.x, q.y);
   }
-  drawStrip(dl, pts, colBlack, thickThin);
+  drawStrip(dl, pts, colMain, thickThin);
 
   pts.clear();
   for (int i = 0; i < 2; ++i) {
     Point3D q = s->getVertex(0, i);
     appendVertex(pts, view, q.x, q.y);
   }
-  drawStrip(dl, pts, colBlack, thickThin);
+  drawStrip(dl, pts, colMain, thickThin);
 
   pts.clear();
   for (int i = 0; i < s->numRibPoints; ++i) {
     Point3D q = s->getVertex(s->numRibs - 2, i);
     appendVertex(pts, view, q.x, q.y);
   }
-  drawStrip(dl, pts, colBlack, thickThin);
+  drawStrip(dl, pts, colMain, thickThin);
 
   // Lips.
   s = &tract->surfaces[VocalTract::UPPER_LIP];
@@ -247,7 +250,8 @@ void renderVocalTract2DPanel(VocalTract* tract, double* tractParams) {
   ImVec2 canvasMin = pos;
   ImVec2 canvasMax = ImVec2(pos.x + avail.x, pos.y + avail.y);
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  dl->AddRectFilled(canvasMin, canvasMax, IM_COL32(255, 255, 255, 255));
+  dl->AddRectFilled(canvasMin, canvasMax,
+                    ImGui::GetColorU32(ImGuiCol_FrameBg));
   TractView view = computeTractView(canvasMin, canvasMax);
   drawOutline(dl, tract, view);
 
@@ -290,22 +294,23 @@ void renderVocalTract2DPanel(VocalTract* tract, double* tractParams) {
     for (int i = 0; i < CP_COUNT; ++i) pts[i] = getControlPoint(tract, i);
   }
 
+  const ImU32 dotOutline = ImGui::GetColorU32(ImGuiCol_Text);
+  const ImU32 dotIdle = ImGui::GetColorU32(ImGuiCol_FrameBg);
   for (int i = 0; i < CP_COUNT; ++i) {
     ImVec2 sp = view.toScreen(pts[i].modelPos.x, pts[i].modelPos.y);
     bool active = (draggingPoint == i);
     bool hover = (hoverPoint == i);
-    ImU32 fill = active ? IM_COL32(40, 120, 220, 255)
+    ImU32 fill = active ? IM_COL32(40, 130, 230, 255)
                         : hover ? IM_COL32(255, 200, 80, 255)
-                                : IM_COL32(255, 255, 255, 255);
-    ImU32 outline = IM_COL32(20, 20, 20, 255);
+                                : dotIdle;
     dl->AddCircleFilled(sp, 5.0f, fill);
-    dl->AddCircle(sp, 5.0f, outline, 0, 1.5f);
+    dl->AddCircle(sp, 5.0f, dotOutline, 0, 1.5f);
     if (hover || active) {
-      dl->AddText(ImVec2(sp.x + 8.0f, sp.y - 8.0f), outline,
+      dl->AddText(ImVec2(sp.x + 8.0f, sp.y - 8.0f), dotOutline,
                   controlPointLabel(i));
     }
   }
-  dl->AddRect(canvasMin, canvasMax, IM_COL32(150, 150, 150, 255));
+  dl->AddRect(canvasMin, canvasMax, ImGui::GetColorU32(ImGuiCol_Border));
 
   ImGui::End();
 }

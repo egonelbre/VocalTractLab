@@ -21,10 +21,13 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   float canvasH = canvasMax.y - canvasMin.y;
   if (canvasW <= 1.0f || canvasH <= 1.0f) return;
 
-  const ImU32 colBg = IM_COL32(245, 245, 245, 255);
-  const ImU32 colGrid = IM_COL32(200, 200, 200, 255);
-  const ImU32 colCurve = IM_COL32(40, 80, 200, 255);
-  const ImU32 colText = IM_COL32(80, 80, 80, 255);
+  // Theme-aware: read colors back from the active ImGui style every frame
+  // so light/dark/classic switches just work.
+  const ImU32 colBg = ImGui::GetColorU32(ImGuiCol_FrameBg);
+  const ImU32 colGrid = ImGui::GetColorU32(ImGuiCol_Text, 0.22f);
+  const ImU32 colCurve = ImGui::GetColorU32(ImGuiCol_PlotLines);
+  const ImU32 colText = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+  const ImU32 colBorder = ImGui::GetColorU32(ImGuiCol_Border);
   dl->AddRectFilled(canvasMin, canvasMax, colBg);
 
   static std::array<float, FFT_LEN> samples;
@@ -90,7 +93,7 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
     dl->AddPolyline(pts.data(), (int)pts.size(), colCurve, ImDrawFlags_None,
                     1.5f);
   }
-  dl->AddRect(canvasMin, canvasMax, IM_COL32(150, 150, 150, 255));
+  dl->AddRect(canvasMin, canvasMax, colBorder);
 }
 
 }  // namespace

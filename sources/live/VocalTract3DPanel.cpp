@@ -56,22 +56,27 @@ Projected3D project3D(const Camera3D& cam, Point3D p, ImVec2 canvasCenter,
   return out;
 }
 
-// t = 0 (near) → full color, t = 1 (far) → blend toward background gray.
-ImU32 fadeColor(ImU32 base, float t) {
+// t = 0 (near) → full color, t = 1 (far) → blend toward 'toward' (typically
+// the canvas background) so back-side lines recede into the panel.
+ImU32 fadeColor(ImU32 base, ImU32 toward, float t) {
   if (t < 0.0f) t = 0.0f;
   if (t > 1.0f) t = 1.0f;
   float keep = 1.0f - 0.7f * t;
-  int r = (int)(((base >> IM_COL32_R_SHIFT) & 0xFF) * keep +
-                255.0f * (1 - keep) * 0.93f);
-  int g = (int)(((base >> IM_COL32_G_SHIFT) & 0xFF) * keep +
-                255.0f * (1 - keep) * 0.93f);
-  int b = (int)(((base >> IM_COL32_B_SHIFT) & 0xFF) * keep +
-                255.0f * (1 - keep) * 0.95f);
+  float pull = 1.0f - keep;
+  int r0 = (base >> IM_COL32_R_SHIFT) & 0xFF;
+  int g0 = (base >> IM_COL32_G_SHIFT) & 0xFF;
+  int b0 = (base >> IM_COL32_B_SHIFT) & 0xFF;
+  int r1 = (toward >> IM_COL32_R_SHIFT) & 0xFF;
+  int g1 = (toward >> IM_COL32_G_SHIFT) & 0xFF;
+  int b1 = (toward >> IM_COL32_B_SHIFT) & 0xFF;
+  int r = (int)(r0 * keep + r1 * pull);
+  int g = (int)(g0 * keep + g1 * pull);
+  int b = (int)(b0 * keep + b1 * pull);
   return IM_COL32(r, g, b, 255);
 }
 
 void drawWireframe(ImDrawList* dl, VocalTract* tract, const Camera3D& cam,
-                   ImVec2 canvasMin, ImVec2 canvasMax) {
+                   ImVec2 canvasMin, ImVec2 canvasMax, ImU32 bgColor) {
   float canvasW = canvasMax.x - canvasMin.x;
   float canvasH = canvasMax.y - canvasMin.y;
   if (canvasW < 4.0f || canvasH < 4.0f) return;
@@ -130,7 +135,7 @@ void drawWireframe(ImDrawList* dl, VocalTract* tract, const Camera3D& cam,
           if (pts.size() >= 2) {
             for (size_t j = 1; j < pts.size(); ++j) {
               float t = ((depths[j - 1] + depths[j]) * 0.5f - zNear) / zSpan;
-              dl->AddLine(pts[j - 1], pts[j], fadeColor(color, t), 1.0f);
+              dl->AddLine(pts[j - 1], pts[j], fadeColor(color, bgColor, t), 1.0f);
             }
           }
           pts.clear();
@@ -142,7 +147,7 @@ void drawWireframe(ImDrawList* dl, VocalTract* tract, const Camera3D& cam,
       }
       for (size_t j = 1; j < pts.size(); ++j) {
         float t = ((depths[j - 1] + depths[j]) * 0.5f - zNear) / zSpan;
-        dl->AddLine(pts[j - 1], pts[j], fadeColor(color, t), 1.0f);
+        dl->AddLine(pts[j - 1], pts[j], fadeColor(color, bgColor, t), 1.0f);
       }
     }
   };
@@ -165,9 +170,10 @@ void renderVocalTract3DPanel(VocalTract* tract) {
   ImVec2 canvasMin = pos;
   ImVec2 canvasMax = ImVec2(pos.x + avail.x, pos.y + avail.y);
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  dl->AddRectFilled(canvasMin, canvasMax, IM_COL32(245, 245, 250, 255));
-  drawWireframe(dl, tract, cam, canvasMin, canvasMax);
-  dl->AddRect(canvasMin, canvasMax, IM_COL32(150, 150, 150, 255));
+  ImU32 bgColor = ImGui::GetColorU32(ImGuiCol_FrameBg);
+  dl->AddRectFilled(canvasMin, canvasMax, bgColor);
+  drawWireframe(dl, tract, cam, canvasMin, canvasMax, bgColor);
+  dl->AddRect(canvasMin, canvasMax, ImGui::GetColorU32(ImGuiCol_Border));
 
   ImGui::SetCursorScreenPos(canvasMin);
   ImGui::InvisibleButton("##vt3d_canvas", avail,
