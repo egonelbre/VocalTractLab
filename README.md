@@ -2,25 +2,28 @@
 
 This is an **unofficial** fork of [VocalTractLab](https://www.vocaltractlab.de/),
 an articulatory speech synthesizer developed by **Peter Birkholz** (TU Dresden).
-The upstream VTL 2.4 release is preserved under [`official/`](official/);
-fixes and a CMake/vcpkg build live at the repo root so the GUI can be built on
-macOS and Linux alongside the existing Windows Visual Studio project.
+Starting from the VTL 2.4 release, the source tree has been reorganized into
+layered modules and a CMake/vcpkg build that targets macOS, Linux, and Windows
+from a single description.
 
 For documentation, papers, and the official Windows binaries, please refer to
 the upstream site: <https://www.vocaltractlab.de/>.
 
 ## Layout
 
-- `sources/` — C++ source tree (reorganized from the upstream `Sources/` flat
-  layout). Two top-level modules:
-  - `sources/vtl/` — the synthesizer library (the upstream "Backend"), grouped
+- `sources/` — C++ source tree.
+  - `sources/vtl/` — the synthesizer library (upstream "Backend"), grouped
     into `api/`, `core/`, `dsp/`, `io/`, `phonetics/`, `anatomy/`, `glottis/`,
-    `acoustics/`, `synthesis/`, and `analysis/` layers.
-  - `sources/gui/` — the wxWidgets app (the upstream "Frontend"), grouped into
-    `app/`, `pages/`, `dialogs/`, `pictures/`, `graphing/`, and `util/`.
-- `official/` — upstream VTL 2.4 non-source assets: speakers, examples,
-  license, manual, and the legacy Visual Studio `.sln`/`.vcxproj` project
-  files (now pointing at the moved `sources/`).
+    `acoustics/`, `synthesis/`, and `analysis/`.
+  - `sources/gui/` — the wxWidgets app (upstream "Frontend"), grouped into
+    `app/`, `pages/`, `dialogs/`, `pictures/`, `graphing/`, `util/`, and
+    `windows/` (Windows resource compilation inputs).
+- `data/` — runtime data the GUI loads at startup: `speakers/`, `config.ini`,
+  the `example01.*` set, vowel outline GIFs, and a `batch/` directory of
+  segment files for the batch tools.
+- `examples/` — API client demos. `matlab/` and `python/` show how to call
+  the `VocalTractLabApi` shared library.
+- `docs/` — manual and other documentation.
 - `CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json` — cross-platform build
   for the `VocalTractLab2` GUI executable and the `VocalTractLabApi` shared
   library.
@@ -76,15 +79,10 @@ The build output lands in `build/<preset>/`:
 - macOS: `VocalTractLab2.app` with speaker files, `config.ini`,
   `example01.*`, vowel outline GIFs, and `Examples/` bundled into
   `Contents/Resources/`.
-- Linux / Windows: `VocalTractLab2` executable. Run it from
-  `official/GUI/` (or copy the speaker/config files next to the binary) so
-  it can find `JD2.speaker`, `config.ini`, etc.
-
-### Windows
-
-The original `GUI/Developer/VocalTractLab2.sln` still works for Windows
-developers and remains the upstream-sanctioned build path. The CMake build
-is provided as a portable alternative.
+- Linux / Windows: `VocalTractLab2` executable. Copy the contents of
+  `data/` (speakers, `config.ini`, example files, and the `batch/`
+  directory renamed to `Examples/`) next to the binary so it can find
+  `JD2.speaker`, `config.ini`, etc. at runtime.
 
 ## License
 
