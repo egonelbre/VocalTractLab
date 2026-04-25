@@ -319,7 +319,14 @@ endif()
 if(VTL_BUILD_LIVE)
   set(LIVE_SOURCES
     sources/live/main.cpp
+    sources/live/AssetPaths.cpp
     sources/live/AudioEngine.cpp
+    sources/live/ControlPoints.cpp
+    sources/live/ControlsPanel.cpp
+    sources/live/SpectrumPanel.cpp
+    sources/live/TractView.cpp
+    sources/live/VocalTract2DPanel.cpp
+    sources/live/VocalTract3DPanel.cpp
   )
 
   if(EMSCRIPTEN)
