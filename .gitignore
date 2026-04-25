@@ -11,5 +11,10 @@ vcpkg_installed/
 # IDE / editor
 .vscode/
 .idea/
+.vs/
 .cache/
 compile_commands.json
+
+# Prebuilt Windows binaries (kept out of the source tree)
+*.exe
+*.dll
