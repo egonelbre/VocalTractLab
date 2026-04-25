@@ -127,7 +127,20 @@ by the geometry update path).
 **Expected:** ~2–3% on `BM_SynthesisAddTube_Block`, plus removes the
 allocation churn that hides further wins.
 
-### [ ] 3. Hoist constants and reformulate sqrt-filter in `calcNoiseSample`
+### [~] 3. Hoist constants and reformulate sqrt-filter in `calcNoiseSample` — **no measurable win, not committed**
+
+**Result (2026-04-25):** tried hoisting `TIME_CONSTANT_SAMPLES`, `F`,
+and `1.0 - F` to `static const` inside the `targetAmp > currentAmp`
+branch. Bit-identical output, but no measurable wall-time
+difference: the branch is only entered while noise amplitude is
+*rising*, which is rare in `BM_SynthesisAddTube_Block` (held vowel
+keeps both amplitudes at 0) and a tiny fraction of
+`BM_GesturalScoreToAudio` overall. Reverted; the change wasn't worth
+the noise floor it introduced. The sqrt-filter reformulation was
+deliberately not attempted — the existing comment is explicit that
+the sqrt is what gives plosives the right delayed-rise shape.
+
+
 
 **Where:** `sources/vtl/acoustics/TdsModel.cpp:1500–1507`.
 
