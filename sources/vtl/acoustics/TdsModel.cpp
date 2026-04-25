@@ -388,6 +388,8 @@ void TdsModel::resetMotion()
     ts->monopoleSource.isFirstOrder = false;
     ts->monopoleSource.cutoffFreq = 1.0;
     ts->monopoleSource.sample = 0.0;
+    ts->monopoleSource.cachedCutoffTimesStep = std::nan("");
+    ts->monopoleSource.cachedIsFirstOrder = false;
     for (k = 0; k < NUM_NOISE_BUFFER_SAMPLES; k++)
     {
       ts->monopoleSource.inputBuffer[k] = 0.0;
@@ -399,7 +401,9 @@ void TdsModel::resetMotion()
     ts->dipoleSource.isFirstOrder = false;
     ts->dipoleSource.cutoffFreq = 1.0;
     ts->dipoleSource.sample = 0.0;
-    
+    ts->dipoleSource.cachedCutoffTimesStep = std::nan("");
+    ts->dipoleSource.cachedIsFirstOrder = false;
+
     for (k = 0; k < NUM_NOISE_BUFFER_SAMPLES; k++)
     {
       ts->dipoleSource.inputBuffer[k] = 0.0;
@@ -414,6 +418,8 @@ void TdsModel::resetMotion()
   lipsDipoleSource.isFirstOrder = false;
   lipsDipoleSource.cutoffFreq = 1.0;
   lipsDipoleSource.sample = 0.0;
+  lipsDipoleSource.cachedCutoffTimesStep = std::nan("");
+  lipsDipoleSource.cachedIsFirstOrder = false;
 
   for (k = 0; k < NUM_NOISE_BUFFER_SAMPLES; k++)
   {
@@ -1537,17 +1543,33 @@ void TdsModel::calcNoiseSample(NoiseSource *s, double ampThreshold)
   // ****************************************************************
   
   // Setup the IIR-filter to get the filter coefficients.
-  IirFilter filter;
-
-  if (s->isFirstOrder)
+  // The coefficients are a function of (isFirstOrder, cutoffFreq*timeStep);
+  // both are geometry-rate, so the cached coefficients are reused on most
+  // samples — coefficient construction (clearCoefficients + tan + muls)
+  // only runs when the inputs actually change.
+  const double cutoffTimesStep = s->cutoffFreq * timeStep;
+  if (cutoffTimesStep != s->cachedCutoffTimesStep ||
+      s->isFirstOrder != s->cachedIsFirstOrder)
   {
-    filter.createSinglePoleLowpass(s->cutoffFreq*timeStep);
-  }
-  else
-  {
-    // Always assume a critically damped 2nd order low-pass filter.
-    double Q = 1.0 / sqrt(2.0);
-    filter.createSecondOrderLowpass(s->cutoffFreq * timeStep, Q);
+    IirFilter scratch;
+    if (s->isFirstOrder)
+    {
+      scratch.createSinglePoleLowpass(cutoffTimesStep);
+    }
+    else
+    {
+      // Always assume a critically damped 2nd order low-pass filter.
+      const double Q = 1.0 / sqrt(2.0);
+      scratch.createSecondOrderLowpass(cutoffTimesStep, Q);
+    }
+    s->cachedOrder = scratch.order;
+    for (int j = 0; j <= scratch.order; j++)
+    {
+      s->cachedA[j] = scratch.a[j];
+      s->cachedB[j] = scratch.b[j];
+    }
+    s->cachedCutoffTimesStep = cutoffTimesStep;
+    s->cachedIsFirstOrder = s->isFirstOrder;
   }
 
   // ****************************************************************
@@ -1587,12 +1609,12 @@ void TdsModel::calcNoiseSample(NoiseSource *s, double ampThreshold)
   while ((inputSample < -1.0) || (inputSample > 1.0));
   
   s->inputBuffer[position & NOISE_BUFFER_MASK] = inputSample;
-  double sum = filter.a[0] * inputSample;
+  double sum = s->cachedA[0] * inputSample;
   int k;
-  for (k = 1; k <= filter.order; k++)
+  for (k = 1; k <= s->cachedOrder; k++)
   {
-    sum += filter.a[k] * s->inputBuffer[(position - k) & NOISE_BUFFER_MASK];
-    sum += filter.b[k] * s->outputBuffer[(position - k) & NOISE_BUFFER_MASK];
+    sum += s->cachedA[k] * s->inputBuffer[(position - k) & NOISE_BUFFER_MASK];
+    sum += s->cachedB[k] * s->outputBuffer[(position - k) & NOISE_BUFFER_MASK];
   }
   s->outputBuffer[position & NOISE_BUFFER_MASK] = sum;
   s->sample = sum * filterGain;      // Resulting magnitude

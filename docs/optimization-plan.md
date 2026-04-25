@@ -89,7 +89,25 @@ Lock the result with the existing audio-regression hash tests on
 
 **Expected:** 20–30% wall-clock win on `BM_GetTransferFunction`.
 
-### [ ] 2. Cache `IirFilter` per noise source
+### [x] 2. Cache `IirFilter` per noise source
+
+**Result (2026-04-25):** **-1.8% on BM_SynthesisAddTube_Block**
+(762 µs → 748 µs). Audio hashes bit-identical.
+
+First attempt embedded a full `IirFilter` (~1.6 KB) into each
+`NoiseSource`; that **regressed** AddTube_Block by ~2.5% — the
+unused `inputBuffer[64]` / `outputBuffer[64]` arrays inside
+`IirFilter` blew out cache lines that the surrounding NoiseSource
+fields share. Fix: cache only the small `cachedA[3]`, `cachedB[3]`,
+`cachedOrder` (max filter order is 2). Use a stack `IirFilter` as a
+scratch helper on the cache-miss slow path; the audio loop reads
+the small cached arrays directly.
+
+Win is modest because most `calcNoiseSample` calls during a held
+vowel return early through the "source is off" branch; the cache
+benefit only kicks in when noise is actively generating.
+
+
 
 **Where:** `sources/vtl/acoustics/TdsModel.cpp:1540` (`calcNoiseSample`).
 

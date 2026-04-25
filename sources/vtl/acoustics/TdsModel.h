@@ -116,6 +116,19 @@ public:
     double inputBuffer[NUM_NOISE_BUFFER_SAMPLES];
     double outputBuffer[NUM_NOISE_BUFFER_SAMPLES];
     double sample;        ///< The current sampling point of the noise source
+
+    // Coefficient cache for the spectral shaping filter. Coefficients only
+    // depend on (isFirstOrder, cutoffFreq * timeStep), which change at
+    // geometry rate, not audio rate — calcNoiseSample reuses the cached
+    // a[]/b[] when the key is unchanged (typical case). Max order is 2
+    // (createSinglePoleLowpass / createSecondOrderLowpass), so 3 slots is
+    // enough; keeping the cache slim avoids polluting the L1 line that the
+    // surrounding NoiseSource fields share.
+    double cachedA[3];
+    double cachedB[3];
+    int    cachedOrder;
+    double cachedCutoffTimesStep;  // NaN until first computation
+    bool   cachedIsFirstOrder;
   };
 
   // ************************************************************************
