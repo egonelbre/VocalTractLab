@@ -106,7 +106,7 @@ set(GUI_SOURCES
 set(ALL_SOURCES ${VTL_SOURCES} ${GUI_SOURCES})
 
 if(WIN32)
-  list(APPEND ALL_SOURCES official/GUI/Developer/VocalTractLab2.rc)
+  list(APPEND ALL_SOURCES sources/gui/windows/VocalTractLab2.rc)
 endif()
 
 # --- Target -----------------------------------------------------------------
@@ -117,8 +117,11 @@ target_include_directories(VocalTractLab2 PRIVATE
   sources
   sources/vtl
   sources/gui
-  official/GUI/Developer
 )
+if(WIN32)
+  # resource.h is included by sources/gui/windows/VocalTractLab2.rc.
+  target_include_directories(VocalTractLab2 PRIVATE sources/gui/windows)
+endif()
 
 target_link_libraries(VocalTractLab2 PRIVATE ${wxWidgets_LIBRARIES})
 
@@ -171,7 +174,7 @@ endif()
 
 set(API_SOURCES ${VTL_SOURCES})
 if(WIN32)
-  list(APPEND API_SOURCES official/API/Developer/VocalTractLabApi.def)
+  list(APPEND API_SOURCES sources/vtl/api/VocalTractLabApi.def)
 endif()
 
 add_library(VocalTractLabApi SHARED ${API_SOURCES})
