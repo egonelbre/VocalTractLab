@@ -143,27 +143,27 @@ if(APPLE)
   # Data::init uses wxStandardPaths::GetResourcesDir() on Apple, so the
   # app resolves these at the same relative location the Windows build
   # expects them next to the .exe.
-  set(GUI_RESOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/official/GUI")
   set(BUNDLE_RESOURCE_FILES
-    "${GUI_RESOURCE_DIR}/JD2.speaker"
-    "${GUI_RESOURCE_DIR}/M01.speaker"
-    "${GUI_RESOURCE_DIR}/W02.speaker"
-    "${GUI_RESOURCE_DIR}/config.ini"
-    "${GUI_RESOURCE_DIR}/example01-orig.wav"
-    "${GUI_RESOURCE_DIR}/example01.ges"
-    "${GUI_RESOURCE_DIR}/example01.seg"
-    "${GUI_RESOURCE_DIR}/example01.tube"
-    "${GUI_RESOURCE_DIR}/Vowel-a-outline.gif"
-    "${GUI_RESOURCE_DIR}/Vowel-i-outline.gif"
-    "${GUI_RESOURCE_DIR}/Vowel-u-outline.gif"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/JD2.speaker"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/M01.speaker"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/W02.speaker"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/config.ini"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/example01-orig.wav"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/example01.ges"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/example01.seg"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/example01.tube"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/Vowel-a-outline.gif"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/Vowel-i-outline.gif"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/Vowel-u-outline.gif"
   )
   target_sources(VocalTractLab2 PRIVATE ${BUNDLE_RESOURCE_FILES})
   set_source_files_properties(${BUNDLE_RESOURCE_FILES} PROPERTIES
     MACOSX_PACKAGE_LOCATION "Resources"
   )
 
-  # Mirror the GUI/Examples directory into Contents/Resources/Examples.
-  file(GLOB EXAMPLE_FILES "${GUI_RESOURCE_DIR}/Examples/*")
+  # Mirror data/batch/ into Contents/Resources/Examples (the directory name
+  # the GUI's batch tools look for next to the executable).
+  file(GLOB EXAMPLE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/batch/*")
   target_sources(VocalTractLab2 PRIVATE ${EXAMPLE_FILES})
   set_source_files_properties(${EXAMPLE_FILES} PROPERTIES
     MACOSX_PACKAGE_LOCATION "Resources/Examples"
