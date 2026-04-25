@@ -24,7 +24,7 @@
 #include "AnalysisResultsDialog.h"
 #include "AnnotationDialog.h"
 #include "SilentMessageBox.h"
-#include "../Backend/SoundLib.h"
+#include "Backend/io/SoundLib.h"
 #include <wx/numdlg.h> 
 
 // ****************************************************************************

@@ -26,8 +26,8 @@
 #include <wx/statline.h>
 #include "SilentMessageBox.h"
 #include "VocalTractDialog.h"
-#include "../Backend/SoundLib.h"
-#include "../Backend/Synthesizer.h"
+#include "Backend/io/SoundLib.h"
+#include "Backend/synthesis/Synthesizer.h"
 
 using namespace std;
 

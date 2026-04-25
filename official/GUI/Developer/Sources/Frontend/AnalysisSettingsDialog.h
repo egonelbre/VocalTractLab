@@ -28,8 +28,8 @@
 
 #include "Data.h"
 #include "SpectrogramPlot.h"
-#include "../Backend/F0EstimatorYin.h"
-#include "../Backend/VoiceQualityEstimator.h"
+#include "Backend/analysis/F0EstimatorYin.h"
+#include "Backend/analysis/VoiceQualityEstimator.h"
 
 
 // ****************************************************************************

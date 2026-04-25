@@ -24,10 +24,10 @@
 
 #include "BasicPicture.h"
 #include "Graph.h"
-#include "../Backend/Glottis.h"
-#include "../Backend/GeometricGlottis2019.h"
-#include "../Backend/GeometricGlottis2025.h"
-#include "../Backend/TriangularGlottis.h"
+#include "Backend/glottis/Glottis.h"
+#include "Backend/glottis/GeometricGlottis2019.h"
+#include "Backend/glottis/GeometricGlottis2025.h"
+#include "Backend/glottis/TriangularGlottis.h"
 
 // ****************************************************************************
 // ****************************************************************************

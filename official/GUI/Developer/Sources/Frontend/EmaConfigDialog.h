@@ -27,7 +27,7 @@
 #include <wx/spinctrl.h>
 
 #include "Data.h"
-#include "../Backend/VocalTract.h"
+#include "Backend/anatomy/VocalTract.h"
 #include "VocalTractPicture.h"
 
 // ****************************************************************************

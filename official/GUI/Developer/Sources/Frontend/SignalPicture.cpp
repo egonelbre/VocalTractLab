@@ -22,7 +22,7 @@
 #include "AnalysisResultsDialog.h"
 #include "SignalPicture.h"
 #include "Data.h"
-#include "../Backend/Dsp.h"
+#include "Backend/dsp/Dsp.h"
 
 
 static const wxPen trackPen[Data::NUM_TRACKS] = 

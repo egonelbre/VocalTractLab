@@ -22,13 +22,13 @@
 #include "MainWindow.h"
 #include "IconsXpm.h"
 #include "SilentMessageBox.h"
-#include "../Backend/SoundLib.h"
-#include "../Backend/AudioFile.h"
-#include "../Backend/Dsp.h"
-#include "../Backend/TimeFunction.h"
-#include "../Backend/XmlNode.h"
-#include "../Backend/Synthesizer.h"
-#include "../Backend/VocalTractLabApi.h"
+#include "Backend/io/SoundLib.h"
+#include "Backend/io/AudioFile.h"
+#include "Backend/dsp/Dsp.h"
+#include "Backend/core/TimeFunction.h"
+#include "Backend/io/XmlNode.h"
+#include "Backend/synthesis/Synthesizer.h"
+#include "Backend/api/VocalTractLabApi.h"
 
 #include <iostream>
 #include <wx/choicdlg.h>

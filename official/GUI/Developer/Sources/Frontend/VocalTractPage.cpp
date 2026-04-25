@@ -36,11 +36,11 @@
 #include "SilentMessageBox.h"
 #include "VocalTractDialog.h"
 #include "TransitionDialog.h"
-#include "../Backend/SoundLib.h"
-#include "../Backend/Synthesizer.h"
-#include "../Backend/VocalTractLabApi.h"
-#include "../Backend/Dsp.h"
-#include "../Backend/Synthesizer.h"
+#include "Backend/io/SoundLib.h"
+#include "Backend/synthesis/Synthesizer.h"
+#include "Backend/api/VocalTractLabApi.h"
+#include "Backend/dsp/Dsp.h"
+#include "Backend/synthesis/Synthesizer.h"
 
 using namespace std;
 

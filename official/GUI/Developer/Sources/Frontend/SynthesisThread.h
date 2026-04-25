@@ -24,8 +24,8 @@
 
 #include <wx/thread.h>
 #include <wx/wx.h>
-#include "../Backend/TubeSequence.h"
-#include "../Backend/TdsModel.h"
+#include "Backend/acoustics/TubeSequence.h"
+#include "Backend/acoustics/TdsModel.h"
 #include "Data.h"
 
 // Define the IDs for events that are sent to the GUI treat.

@@ -21,7 +21,7 @@
 
 #include <wx/clipbrd.h>
 #include "AnalysisResultsDialog.h"
-#include "../Backend/Dsp.h"
+#include "Backend/dsp/Dsp.h"
 
 // The single instance of this class.
 AnalysisResultsDialog *AnalysisResultsDialog::instance = NULL;

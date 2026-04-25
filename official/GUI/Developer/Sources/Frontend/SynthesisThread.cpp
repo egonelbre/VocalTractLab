@@ -21,7 +21,7 @@
 
 #include <fstream>
 #include "SynthesisThread.h"
-#include "../Backend/Synthesizer.h"
+#include "Backend/synthesis/Synthesizer.h"
 #include <wx/stopwatch.h>
 
 

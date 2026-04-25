@@ -28,7 +28,7 @@
 #include <vector>
 
 #include "Data.h"
-#include "../Backend/SegmentSequence.h"
+#include "Backend/phonetics/SegmentSequence.h"
 
 using namespace std;
 

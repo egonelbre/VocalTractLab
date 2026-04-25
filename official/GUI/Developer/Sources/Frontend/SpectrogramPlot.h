@@ -23,7 +23,7 @@
 #define __SPECTROGRAM_PLOT_H__
 
 #include <wx/wx.h>
-#include "../Backend/Dsp.h"
+#include "Backend/dsp/Dsp.h"
 #include <vector>
 
 using namespace std;

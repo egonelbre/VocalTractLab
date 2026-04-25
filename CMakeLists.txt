@@ -24,37 +24,37 @@ set(GUI_DIR official/GUI/Developer)
 set(API_DIR official/API/Developer)
 
 set(BACKEND_SOURCES
-  ${GUI_DIR}/Sources/Backend/AnatomyParams.cpp
-  ${GUI_DIR}/Sources/Backend/Constants.cpp
-  ${GUI_DIR}/Sources/Backend/Dsp.cpp
-  ${GUI_DIR}/Sources/Backend/F0EstimatorYin.cpp
-  ${GUI_DIR}/Sources/Backend/GeometricGlottis2019.cpp
-  ${GUI_DIR}/Sources/Backend/GeometricGlottis2025.cpp
-  ${GUI_DIR}/Sources/Backend/Geometry.cpp
-  ${GUI_DIR}/Sources/Backend/GesturalScore.cpp
-  ${GUI_DIR}/Sources/Backend/Glottis.cpp
-  ${GUI_DIR}/Sources/Backend/IirFilter.cpp
-  ${GUI_DIR}/Sources/Backend/LfPulse.cpp
-  ${GUI_DIR}/Sources/Backend/Matrix2x2.cpp
-  ${GUI_DIR}/Sources/Backend/PoleZeroPlan.cpp
-  ${GUI_DIR}/Sources/Backend/Sampa.cpp
-  ${GUI_DIR}/Sources/Backend/SegmentSequence.cpp
-  ${GUI_DIR}/Sources/Backend/Signal.cpp
-  ${GUI_DIR}/Sources/Backend/SoundLib.cpp
-  ${GUI_DIR}/Sources/Backend/Splines.cpp
-  ${GUI_DIR}/Sources/Backend/StaticPhone.cpp
-  ${GUI_DIR}/Sources/Backend/Surface.cpp
-  ${GUI_DIR}/Sources/Backend/Synthesizer.cpp
-  ${GUI_DIR}/Sources/Backend/TdsModel.cpp
-  ${GUI_DIR}/Sources/Backend/TimeFunction.cpp
-  ${GUI_DIR}/Sources/Backend/TlModel.cpp
-  ${GUI_DIR}/Sources/Backend/TriangularGlottis.cpp
-  ${GUI_DIR}/Sources/Backend/Tube.cpp
-  ${GUI_DIR}/Sources/Backend/VocalTract.cpp
-  ${GUI_DIR}/Sources/Backend/VocalTractLabApi.cpp
-  ${GUI_DIR}/Sources/Backend/VoiceQualityEstimator.cpp
-  ${GUI_DIR}/Sources/Backend/XmlHelper.cpp
-  ${GUI_DIR}/Sources/Backend/XmlNode.cpp
+  ${GUI_DIR}/Sources/Backend/acoustics/TdsModel.cpp
+  ${GUI_DIR}/Sources/Backend/acoustics/TlModel.cpp
+  ${GUI_DIR}/Sources/Backend/acoustics/Tube.cpp
+  ${GUI_DIR}/Sources/Backend/analysis/F0EstimatorYin.cpp
+  ${GUI_DIR}/Sources/Backend/analysis/PoleZeroPlan.cpp
+  ${GUI_DIR}/Sources/Backend/analysis/VoiceQualityEstimator.cpp
+  ${GUI_DIR}/Sources/Backend/anatomy/AnatomyParams.cpp
+  ${GUI_DIR}/Sources/Backend/anatomy/Splines.cpp
+  ${GUI_DIR}/Sources/Backend/anatomy/Surface.cpp
+  ${GUI_DIR}/Sources/Backend/anatomy/VocalTract.cpp
+  ${GUI_DIR}/Sources/Backend/api/VocalTractLabApi.cpp
+  ${GUI_DIR}/Sources/Backend/core/Constants.cpp
+  ${GUI_DIR}/Sources/Backend/core/Geometry.cpp
+  ${GUI_DIR}/Sources/Backend/core/Matrix2x2.cpp
+  ${GUI_DIR}/Sources/Backend/core/TimeFunction.cpp
+  ${GUI_DIR}/Sources/Backend/dsp/Dsp.cpp
+  ${GUI_DIR}/Sources/Backend/dsp/IirFilter.cpp
+  ${GUI_DIR}/Sources/Backend/dsp/Signal.cpp
+  ${GUI_DIR}/Sources/Backend/glottis/GeometricGlottis2019.cpp
+  ${GUI_DIR}/Sources/Backend/glottis/GeometricGlottis2025.cpp
+  ${GUI_DIR}/Sources/Backend/glottis/Glottis.cpp
+  ${GUI_DIR}/Sources/Backend/glottis/LfPulse.cpp
+  ${GUI_DIR}/Sources/Backend/glottis/TriangularGlottis.cpp
+  ${GUI_DIR}/Sources/Backend/io/SoundLib.cpp
+  ${GUI_DIR}/Sources/Backend/io/XmlHelper.cpp
+  ${GUI_DIR}/Sources/Backend/io/XmlNode.cpp
+  ${GUI_DIR}/Sources/Backend/phonetics/Sampa.cpp
+  ${GUI_DIR}/Sources/Backend/phonetics/SegmentSequence.cpp
+  ${GUI_DIR}/Sources/Backend/synthesis/GesturalScore.cpp
+  ${GUI_DIR}/Sources/Backend/synthesis/StaticPhone.cpp
+  ${GUI_DIR}/Sources/Backend/synthesis/Synthesizer.cpp
 )
 
 set(FRONTEND_SOURCES
@@ -117,6 +117,7 @@ endif()
 add_executable(VocalTractLab2 WIN32 MACOSX_BUNDLE ${ALL_SOURCES})
 
 target_include_directories(VocalTractLab2 PRIVATE
+  ${GUI_DIR}/Sources
   ${GUI_DIR}/Sources/Backend
   ${GUI_DIR}/Sources/Frontend
   ${GUI_DIR}
@@ -179,6 +180,7 @@ endif()
 add_library(VocalTractLabApi SHARED ${API_SOURCES})
 
 target_include_directories(VocalTractLabApi PRIVATE
+  ${GUI_DIR}/Sources
   ${GUI_DIR}/Sources/Backend
 )
 

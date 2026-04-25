@@ -20,7 +20,7 @@
 // ****************************************************************************
 
 #include "FdsOptionsDialog.h"
-#include "../Backend/Constants.h"
+#include "Backend/core/Constants.h"
 
 // IDs of the controls
 
