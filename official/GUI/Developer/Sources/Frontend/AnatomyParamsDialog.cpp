@@ -123,6 +123,8 @@ void AnatomyParamsDialog::initWidgets()
   wxBoxSizer *topLevelSizer = new wxBoxSizer(wxVERTICAL);
   wxStaticBoxSizer *upperSizer = new wxStaticBoxSizer(wxVERTICAL, this, "High-level parameters");
   wxStaticBoxSizer *lowerSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Low-level parameters");
+  wxWindow *upperBox = upperSizer->GetStaticBox();
+  wxWindow *lowerBox = lowerSizer->GetStaticBox();
   wxSizer *sizer = NULL;
 
   // Create an invisible dummy button with the ID wxID_CANCEL, so that
@@ -149,28 +151,28 @@ void AnatomyParamsDialog::initWidgets()
 
   sizer = new wxBoxSizer(wxHORIZONTAL);
 
-  label = new wxStaticText(this, wxID_ANY, "Age: ");
+  label = new wxStaticText(upperBox, wxID_ANY, "Age: ");
   sizer->Add(label);
 
-  labAge = new wxStaticText(this, wxID_ANY, "x");
+  labAge = new wxStaticText(upperBox, wxID_ANY, "x");
   sizer->Add(labAge);
 
   upperSizer->Add(sizer, 0, wxALL, 5);
 
   // ****************************************************************
 
-  scrAge = new wxScrollBar(this, IDS_AGE, wxDefaultPosition, wxSize(300, -1));
+  scrAge = new wxScrollBar(upperBox, IDS_AGE, wxDefaultPosition, wxSize(300, -1));
   scrAge->SetScrollbar(0, 1, 12*20, 1, false);    // Step size is in month.
   upperSizer->Add(scrAge, 0, wxALL, 5);
 
   // ****************************************************************
 
   sizer = new wxBoxSizer(wxHORIZONTAL);
-  
-  radMale = new wxRadioButton(this, IDR_MALE, "Male");
+
+  radMale = new wxRadioButton(upperBox, IDR_MALE, "Male");
   sizer->Add(radMale);
 
-  radFemale = new wxRadioButton(this, IDR_FEMALE, "Female");
+  radFemale = new wxRadioButton(upperBox, IDR_FEMALE, "Female");
   sizer->Add(radFemale, 0, wxLEFT, 10);
 
   upperSizer->Add(sizer, 0, wxALL, 5);
@@ -181,10 +183,10 @@ void AnatomyParamsDialog::initWidgets()
 
   sizer = new wxBoxSizer(wxHORIZONTAL);
 
-  button = new wxButton(this, IDB_GET_PARAMS_FROM_VT, "Get parameters from VT");
+  button = new wxButton(lowerBox, IDB_GET_PARAMS_FROM_VT, "Get parameters from VT");
   sizer->Add(button, 1);
 
-  button = new wxButton(this, IDB_SET_PARAMS_FOR_VT, "Set parameters for VT");
+  button = new wxButton(lowerBox, IDB_SET_PARAMS_FOR_VT, "Set parameters for VT");
   sizer->Add(button, 1, wxLEFT, 10);
 
   lowerSizer->Add(sizer, 0, wxALL | wxGROW, 5);
@@ -196,16 +198,16 @@ void AnatomyParamsDialog::initWidgets()
   for (i=0; i < AnatomyParams::NUM_ANATOMY_PARAMS; i++)
   {
     st = wxString(params->param[i].name) + " (" + wxString(params->param[i].abbr) + ")";
-    label = new wxStaticText(this, wxID_ANY, st);
+    label = new wxStaticText(lowerBox, wxID_ANY, st);
     lowerSizer->Add(label, 0, wxALL, 3);
 
     sizer = new wxBoxSizer(wxHORIZONTAL);
 
-    scrParam[i] = new wxScrollBar(this, IDS_PARAM0 + i, wxDefaultPosition, wxSize(250, -1));
+    scrParam[i] = new wxScrollBar(lowerBox, IDS_PARAM0 + i, wxDefaultPosition, wxSize(250, -1));
     scrParam[i]->SetScrollbar(0, 1, 101, 1, false);
     sizer->Add(scrParam[i], 0);
 
-    labParam[i] = new wxStaticText(this, wxID_ANY, "x", wxDefaultPosition, wxSize(50, -1));
+    labParam[i] = new wxStaticText(lowerBox, wxID_ANY, "x", wxDefaultPosition, wxSize(50, -1));
     sizer->Add(labParam[i], 0, wxALIGN_CENTER | wxLEFT, 10);
 
     lowerSizer->Add(sizer, 0, wxALL, 3);
