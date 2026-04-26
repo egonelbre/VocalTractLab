@@ -189,10 +189,27 @@ bool segmentedButton(const char* label, bool selected) {
 
 }  // namespace
 
+// Animated transition between tract shapes. A click captures the
+// current params as `from` and the preset's params as `to`; subsequent
+// frames blend toward `to` over kInterpDuration with a smoothstep
+// curve so the 2D outline glides instead of snapping. Back-to-back
+// clicks chain because the new `from` is sampled *after* the in-flight
+// blend has been applied for the current frame.
+struct ShapeInterpolation {
+  bool active = false;
+  double startTime = 0.0;
+  std::vector<double> from;
+  std::vector<double> to;
+};
+
+constexpr double kInterpDuration = 0.10;  // seconds
+
 void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
                             const std::vector<SpeakerOption>& speakers,
                             ImFont* buttonFont) {
   ImGui::Begin("Tract Shapes");
+
+  static ShapeInterpolation interp;
 
   // ---- Speaker switcher ----------------------------------------------------
   if (!speakers.empty()) {
@@ -222,12 +239,37 @@ void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
           // writeFrameSnapshot doesn't clobber the new engine's
           // defaults with stale params from the old speaker.
           snap = readFrameSnapshot(engine);
+          // Drop any in-flight interpolation: its `from`/`to` belong
+          // to the previous speaker and would yank the new defaults.
+          interp.active = false;
         }
       }
     }
     ImGui::PopStyleVar();
     ImGui::PopID();
     ImGui::Spacing();
+  }
+
+  // ---- Apply in-flight interpolation --------------------------------------
+  // Runs before the shape buttons so a click in this frame captures the
+  // current eased value as its new `from`, letting back-to-back clicks
+  // chain smoothly.
+  if (interp.active) {
+    double elapsed = ImGui::GetTime() - interp.startTime;
+    double t = elapsed / kInterpDuration;
+    if (t >= 1.0) {
+      for (int p = 0; p < VocalTract::NUM_PARAMS; ++p) {
+        snap.tractParams[p] = interp.to[p];
+      }
+      interp.active = false;
+    } else {
+      if (t < 0.0) t = 0.0;
+      double e = t * t * (3.0 - 2.0 * t);  // smoothstep
+      for (int p = 0; p < VocalTract::NUM_PARAMS; ++p) {
+        snap.tractParams[p] =
+            interp.from[p] + (interp.to[p] - interp.from[p]) * e;
+      }
+    }
   }
 
   // ---- Tract shapes grouped by phonetic category ---------------------------
@@ -285,9 +327,16 @@ void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
       bool clicked = ImGui::Button(ipa.c_str(), ImVec2(kButtonWidth, 0.0f));
       if (buttonFont) ImGui::PopFont();
       if (clicked) {
+        // Capture the current (possibly mid-interpolation) params as
+        // the new `from` and the preset as the new `to`; the per-frame
+        // update above will glide snap.tractParams toward `to`.
+        interp.from.assign(snap.tractParams.begin(), snap.tractParams.end());
+        interp.to.assign(VocalTract::NUM_PARAMS, 0.0);
         for (int p = 0; p < VocalTract::NUM_PARAMS; ++p) {
-          snap.tractParams[p] = shapes[item.shapeIndex].param[p];
+          interp.to[p] = shapes[item.shapeIndex].param[p];
         }
+        interp.startTime = ImGui::GetTime();
+        interp.active = true;
       }
       ImGui::PopID();
     }
