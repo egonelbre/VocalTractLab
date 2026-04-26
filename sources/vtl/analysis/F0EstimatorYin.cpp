@@ -90,6 +90,16 @@ F0EstimatorYin::F0EstimatorYin()
 
 
 // ****************************************************************************
+/// Destructor.
+// ****************************************************************************
+
+F0EstimatorYin::~F0EstimatorYin()
+{
+  delete filter;
+}
+
+
+// ****************************************************************************
 /// This function initializes the estimation process and performs the
 /// pre-processing operations (filtering).
 /// firstRoiSample and numRoiSamples define the region of interest in signal,

@@ -74,7 +74,8 @@ public:
 
 public:
   F0EstimatorYin();
-  
+  ~F0EstimatorYin();
+
   void init(Signal16 *signal, int firstRoiSample, int numRoiSamples);
   bool processChunk(int numChunkSamples);
   vector<double> finish();
