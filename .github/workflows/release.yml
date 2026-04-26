@@ -1,11 +1,14 @@
 name: release
 
-# Tag-triggered release pipeline. On `v*` tags:
-#   1. Build the Emscripten/WASM live build → deploy to GitHub Pages and
-#      attach the static-site bundle to the release.
-#   2. Build native binaries for Linux, macOS, and Windows → bundle and
+# Tag-triggered native release pipeline. On `v*` tags:
+#   1. Build native binaries for Linux, macOS, and Windows → bundle and
 #      attach them to the release.
-#   3. Create / update the GitHub Release for the tag.
+#   2. Create / update the GitHub Release for the tag.
+#
+# The WASM/Pages build lives in a separate workflow (wasm.yml) so it
+# can be triggered independently and is not gated on the native build
+# matrix. The wasm artifact is not attached to releases; the live
+# demo on GitHub Pages is the canonical distribution channel for it.
 #
 # Native builds use the existing vcpkg-based CMake presets. vcpkg's
 # binary cache is wired into the GitHub Actions cache so wxWidgets et
@@ -25,8 +28,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -50,66 +51,6 @@ env:
   MACOS_SIGNING_ENABLED: "false"
 
 jobs:
-  wasm:
-    name: Build WASM
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v16
-        with:
-          version: latest
-          actions-cache-folder: emsdk-cache
-
-      - name: Configure (wasm preset)
-        run: cmake --preset wasm
-
-      - name: Build vtl_live
-        run: cmake --build --preset wasm
-
-      - name: Stage Pages site
-        # Emscripten emits vtl_live.{html,js,wasm,data}. The .js/.wasm/.data
-        # references inside the HTML are by basename, so renaming the HTML
-        # to index.html keeps the relative loads working. .nojekyll
-        # disables Jekyll, which would otherwise drop files that start
-        # with an underscore.
-        run: |
-          mkdir -p site
-          cp build/wasm/vtl_live.html  site/index.html
-          cp build/wasm/vtl_live.js    site/
-          cp build/wasm/vtl_live.wasm  site/
-          cp build/wasm/vtl_live.data  site/
-          touch site/.nojekyll
-
-      - name: Stage release tarball
-        run: |
-          mkdir -p artifacts
-          tar -C build/wasm -czf "artifacts/vtl_live-wasm-${GITHUB_REF_NAME}.tar.gz" \
-            vtl_live.html vtl_live.js vtl_live.wasm vtl_live.data
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: site
-
-      - name: Upload release asset
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-wasm
-          path: artifacts/
-
-  deploy-pages:
-    name: Deploy Pages
-    needs: wasm
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v5
-
   native:
     name: Build (${{ matrix.os }})
     strategy:
@@ -345,7 +286,7 @@ jobs:
 
   release:
     name: Publish Release
-    needs: [wasm, native]
+    needs: [native]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
