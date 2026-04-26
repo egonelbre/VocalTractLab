@@ -224,6 +224,7 @@ bool AudioEngine::start(const std::string& speakerFile) {
   ALCdevice* dev = alcOpenDevice(nullptr);
   if (dev == nullptr) {
     std::fprintf(stderr, "live: alcOpenDevice failed\n");
+    stop();
     return false;
   }
   alDevice = dev;
@@ -231,8 +232,7 @@ bool AudioEngine::start(const std::string& speakerFile) {
   if (ctx == nullptr || !alcMakeContextCurrent(ctx)) {
     std::fprintf(stderr, "live: alcCreateContext failed\n");
     if (ctx) alcDestroyContext(ctx);
-    alcCloseDevice(dev);
-    alDevice = nullptr;
+    stop();
     return false;
   }
   alContext = ctx;
