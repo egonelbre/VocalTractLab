@@ -362,6 +362,33 @@ if(VTL_BUILD_LIVE)
     sources/live/VowelChartPanel.cpp
   )
 
+  # Noto Sans Regular (SIL OFL 1.1). Bundled at build time so the live app
+  # can render IPA glyphs (ɪ ɛ ɑ ɔ ʌ ɜ ʊ in the vowel chart) — ImGui's
+  # default Proggy Clean only covers basic ASCII, and JetBrains Mono /
+  # most popular monospace fonts don't cover the IPA Extensions block.
+  # Noto Sans has full 96/96 coverage of U+0250–U+02AF. Pinned to a
+  # monthly release tag with sha256 so a tampered or moved release URL
+  # fails fast at configure time.
+  set(VTL_LIVE_FONT_TAG "noto-monthly-release-2026.04.01")
+  set(VTL_LIVE_FONT_FILE "${CMAKE_BINARY_DIR}/NotoSans-Regular.ttf")
+  set(VTL_LIVE_FONT_SHA256
+      "478c558ea716033cd60c03438f628dfa75694dcf6b5f6d505a2f05fd2b4f3823")
+  if(NOT EXISTS "${VTL_LIVE_FONT_FILE}")
+    message(STATUS "Downloading Noto Sans Regular (${VTL_LIVE_FONT_TAG})")
+    file(DOWNLOAD
+      "https://github.com/notofonts/notofonts.github.io/raw/${VTL_LIVE_FONT_TAG}/fonts/NotoSans/hinted/ttf/NotoSans-Regular.ttf"
+      "${VTL_LIVE_FONT_FILE}"
+      EXPECTED_HASH "SHA256=${VTL_LIVE_FONT_SHA256}"
+      TLS_VERIFY ON
+      STATUS VTL_LIVE_FONT_DL_STATUS
+    )
+    list(GET VTL_LIVE_FONT_DL_STATUS 0 VTL_LIVE_FONT_DL_RC)
+    if(NOT VTL_LIVE_FONT_DL_RC EQUAL 0)
+      message(FATAL_ERROR
+        "Failed to download Noto Sans Regular: ${VTL_LIVE_FONT_DL_STATUS}")
+    endif()
+  endif()
+
   if(EMSCRIPTEN)
     # ---- WASM/browser build -----------------------------------------------
     # Emscripten ships GLFW, OpenAL, and WebGL2 as built-in ports; we only
@@ -415,6 +442,7 @@ if(VTL_BUILD_LIVE)
       "SHELL:-lopenal"
       "SHELL:-lidbfs.js"
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/JD2.speaker@/JD2.speaker"
+      "SHELL:--preload-file ${VTL_LIVE_FONT_FILE}@/NotoSans-Regular.ttf"
       "SHELL:--shell-file ${VTL_LIVE_SHELL}"
     )
     # Trigger relink when the shell template changes.
@@ -468,6 +496,7 @@ if(VTL_BUILD_LIVE)
       foreach(REL ${RUNTIME_DATA_FILES})
         list(APPEND LIVE_BUNDLE_RESOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/${REL}")
       endforeach()
+      list(APPEND LIVE_BUNDLE_RESOURCE_FILES "${VTL_LIVE_FONT_FILE}")
       target_sources(vtl_live PRIVATE ${LIVE_BUNDLE_RESOURCE_FILES})
       set_source_files_properties(${LIVE_BUNDLE_RESOURCE_FILES} PROPERTIES
         MACOSX_PACKAGE_LOCATION "Resources"
@@ -482,6 +511,12 @@ if(VTL_BUILD_LIVE)
           VERBATIM
         )
       endforeach()
+      add_custom_command(TARGET vtl_live POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+          "${VTL_LIVE_FONT_FILE}"
+          "$<TARGET_FILE_DIR:vtl_live>/NotoSans-Regular.ttf"
+        VERBATIM
+      )
     endif()
   endif()
 endif()

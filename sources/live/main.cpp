@@ -235,6 +235,37 @@ int main(int argc, char** argv) {
   // Dark by default; the panels read colors back through GetColorU32 so
   // switching to StyleColorsLight()/StyleColorsClassic() works too.
   ImGui::StyleColorsDark();
+
+  // Replace the default Proggy Clean (ASCII-only) with Noto Sans so the
+  // IPA glyphs in the vowel chart actually render. JetBrains Mono and
+  // most other popular monospace fonts only cover ASCII + Latin
+  // Extended; Noto Sans is the only widely-available font we found with
+  // full 96/96 IPA Extensions coverage at a reasonable size. The build
+  // copies the .ttf next to the binary on native and preloads it at
+  // "/NotoSans-Regular.ttf" on the web, so a single hardcoded name
+  // covers both.
+  {
+#if defined(__EMSCRIPTEN__)
+    std::filesystem::path fontPath = "/NotoSans-Regular.ttf";
+#else
+    std::filesystem::path fontPath = live::findRuntimeAsset(
+        argc > 0 ? argv[0] : "vtl_live", "NotoSans-Regular.ttf");
+#endif
+    // Basic Latin + Latin-1 (covers æ U+00E6) + Latin Extended-A/B + IPA
+    // Extensions (ɪ ɛ ɑ ɔ ʌ ɜ ʊ in VowelChartPanel).
+    static const ImWchar ranges[] = {
+        0x0020, 0x00FF, 0x0100, 0x024F, 0x0250, 0x02AF, 0,
+    };
+    if (!fontPath.empty()) {
+      io.Fonts->AddFontFromFileTTF(fontPath.string().c_str(), 16.0f, nullptr,
+                                   ranges);
+    }
+    if (io.Fonts->Fonts.empty()) {
+      // Font missing on disk — keep the default so the app still launches.
+      io.Fonts->AddFontDefault();
+    }
+  }
+
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init(glslVersion);
 
