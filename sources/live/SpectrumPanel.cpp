@@ -38,7 +38,8 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   const ImU32 colGrid = ImGui::GetColorU32(ImGuiCol_Text, 0.22f);
   const ImU32 colCurve = ImGui::GetColorU32(ImGuiCol_PlotLines);
   const ImU32 colVttf = ImGui::GetColorU32(ImGuiCol_PlotHistogram);
-  const ImU32 colHarmonic = ImGui::GetColorU32(ImGuiCol_Text, 0.30f);
+  const ImU32 colFundamental = ImGui::GetColorU32(ImGuiCol_CheckMark);
+  const ImU32 colHarmonic = ImGui::GetColorU32(ImGuiCol_CheckMark, 0.55f);
   const ImU32 colFormant = ImGui::GetColorU32(ImGuiCol_PlotHistogramHovered);
   const ImU32 colText = ImGui::GetColorU32(ImGuiCol_TextDisabled);
   const ImU32 colBorder = ImGui::GetColorU32(ImGuiCol_Border);
@@ -116,29 +117,13 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   }
   complexFFT(fftBuf, FFT_LEN_EXPONENT, true);
 
-  // ----- Harmonic comb ------------------------------------------------------
-  // Tick marks along the bottom at n * f0 so you can see which model peaks
-  // the current fundamental actually excites. Only drawn when f0 is in a
-  // sensible singing/speech range.
-  if (f0_Hz > 20.0 && f0_Hz < fMax_Hz) {
-    int maxHarmonic = (int)(fMax_Hz / f0_Hz);
-    if (maxHarmonic > 200) maxHarmonic = 200;  // avoid pathological loops
-    for (int n = 1; n <= maxHarmonic; ++n) {
-      double f = (double)n * f0_Hz;
-      float x = xForFreq(f);
-      // Short tick from the bottom; the height makes it visible without
-      // drowning the curves above.
-      dl->AddLine(ImVec2(x, canvasMax.y - 1.0f),
-                  ImVec2(x, canvasMax.y - 8.0f), colHarmonic, 1.0f);
-    }
-  }
-
   // ----- VTTF curve ---------------------------------------------------------
   // Normalize so the in-band peak shows up at 0 dB. Without this the
   // transfer-function magnitudes are on a different scale than the audio
   // FFT and the curve walks off the top/bottom of the window.
+  const double vttfFreqStep = (double)AUDIO_SAMPLING_RATE_HZ / (double)VTTF_LEN;
+  double vttfPeakDb = 0.0;
   if (haveVttf) {
-    const double vttfFreqStep = (double)AUDIO_SAMPLING_RATE_HZ / (double)VTTF_LEN;
     int binMax = (int)(fMax_Hz / vttfFreqStep);
     if (binMax >= VTTF_LEN / 2) binMax = VTTF_LEN / 2 - 1;
     double peakMag = 1e-12;
@@ -146,7 +131,7 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
       double m = s_vttf.getMagnitude(i);
       if (m > peakMag) peakMag = m;
     }
-    double peakDb = 20.0 * std::log10(peakMag);
+    vttfPeakDb = 20.0 * std::log10(peakMag);
 
     std::vector<ImVec2> vttfPts;
     vttfPts.reserve((int)canvasW + 1);
@@ -161,13 +146,59 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
       double m = (1.0 - t) * s_vttf.getMagnitude(i0) +
                  t * s_vttf.getMagnitude(i0 + 1);
       if (m < mag0) m = mag0;
-      double db = 20.0 * std::log10(m) - peakDb;  // peak -> 0 dB
+      double db = 20.0 * std::log10(m) - vttfPeakDb;  // peak -> 0 dB
       vttfPts.push_back(ImVec2(canvasMin.x + (float)px, yForDb(db)));
     }
     if (vttfPts.size() >= 2) {
       dl->AddPolyline(vttfPts.data(), (int)vttfPts.size(), colVttf,
                       ImDrawFlags_None, 1.5f);
     }
+  }
+
+  // ----- Harmonic stem plot -------------------------------------------------
+  // Vertical line at each n*f0 rising from the panel floor to the VTTF
+  // value at that frequency, plus a filled dot at the top — the classic
+  // source-filter view of how the tract amplifies each harmonic of the
+  // current fundamental. Falls back to floor-anchored stubs when no VTTF
+  // is available so the harmonic positions are still visible.
+  if (f0_Hz > 20.0 && f0_Hz < fMax_Hz) {
+    int maxHarmonic = (int)(fMax_Hz / f0_Hz);
+    if (maxHarmonic > 200) maxHarmonic = 200;  // avoid pathological loops
+    for (int n = 1; n <= maxHarmonic; ++n) {
+      double f = (double)n * f0_Hz;
+      float x = xForFreq(f);
+      bool isFundamental = (n == 1);
+      ImU32 col = isFundamental ? colFundamental : colHarmonic;
+      float thickness = isFundamental ? 2.5f : 1.0f;
+      float dotRadius = isFundamental ? 4.0f : 2.0f;
+
+      float yTop;
+      if (haveVttf) {
+        double bin = f / vttfFreqStep;
+        int i0 = (int)bin;
+        if (i0 < 0) i0 = 0;
+        if (i0 >= VTTF_LEN / 2 - 1) i0 = VTTF_LEN / 2 - 2;
+        double t = bin - (double)i0;
+        double m = (1.0 - t) * s_vttf.getMagnitude(i0) +
+                   t * s_vttf.getMagnitude(i0 + 1);
+        if (m < 1e-9) m = 1e-9;
+        double db = 20.0 * std::log10(m) - vttfPeakDb;
+        yTop = yForDb(db);
+      } else {
+        yTop = canvasMax.y - (isFundamental ? 24.0f : 8.0f);
+      }
+      dl->AddLine(ImVec2(x, canvasMax.y), ImVec2(x, yTop), col, thickness);
+      dl->AddCircleFilled(ImVec2(x, yTop), dotRadius, col);
+    }
+
+    // Label the fundamental. Positioned below the formant labels (which
+    // start at canvasMin.y + 2 and stack vertically at 14 px each — F1..F4
+    // occupy y offsets 0..3*14) so the two label clusters don't collide.
+    float xf0 = xForFreq(f0_Hz);
+    char flabel[40];
+    std::snprintf(flabel, sizeof(flabel), "f0 = %d Hz", (int)(f0_Hz + 0.5));
+    dl->AddText(ImVec2(xf0 + 4.0f, canvasMin.y + 2.0f + 4.0f * 14.0f),
+                colFundamental, flabel);
   }
 
   // ----- Audio FFT curve ----------------------------------------------------
