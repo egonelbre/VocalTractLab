@@ -743,7 +743,8 @@ GesturalScore::GesturalScore(VocalTract *vocalTract, Glottis *glottis)
 
 GesturalScore::~GesturalScore()
 {
-  // Do nothing...
+  delete leftTube;
+  delete rightTube;
 }
 
 
