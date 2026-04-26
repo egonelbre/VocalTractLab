@@ -65,16 +65,64 @@ void renderControlsPanel(AudioEngine& engine, FrameSnapshot& snap) {
   // ---- Articulation --------------------------------------------------------
   if (ImGui::CollapsingHeader("Articulation",
                               ImGuiTreeNodeFlags_DefaultOpen)) {
-    for (int i = 0; i < VocalTract::NUM_PARAMS; ++i) {
-      const auto& info = engine.tractParamInfo(i);
-      float v = (float)snap.tractParams[i];
+    // Halve the slider bar so the label that follows it has room to read
+    // even on narrow docks. Without this the slider eats most of the row
+    // and the label gets clipped.
+    ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
+
+    auto tractSlider = [&](int idx, const char* shortLabel) {
+      const auto& info = engine.tractParamInfo(idx);
+      float v = (float)snap.tractParams[idx];
       char label[64];
-      std::snprintf(label, sizeof(label), "%s##t%d", info.abbr.c_str(), i);
+      std::snprintf(label, sizeof(label), "%s##t%d", shortLabel, idx);
       if (ImGui::SliderFloat(label, &v, (float)info.min, (float)info.max,
                              "%.2f")) {
-        snap.tractParams[i] = v;
+        snap.tractParams[idx] = v;
       }
-    }
+    };
+
+    // Group the 19 tract params by articulator. With each section
+    // labelled in a SeparatorText heading, the per-slider label can
+    // collapse to "X" / "Y" / "Angle" etc. instead of repeating the
+    // articulator name on every row.
+    ImGui::SeparatorText("Hyoid");
+    tractSlider(VocalTract::HX, "X");
+    tractSlider(VocalTract::HY, "Y");
+
+    ImGui::SeparatorText("Jaw");
+    tractSlider(VocalTract::JX, "X");
+    tractSlider(VocalTract::JA, "Angle (deg.)");
+
+    ImGui::SeparatorText("Lip");
+    tractSlider(VocalTract::LP, "Protrusion");
+    tractSlider(VocalTract::LD, "Distance");
+
+    ImGui::SeparatorText("Velum");
+    tractSlider(VocalTract::VS, "Shape");
+    tractSlider(VocalTract::VO, "Opening (cm^2)");
+
+    ImGui::SeparatorText("Tongue body");
+    tractSlider(VocalTract::TCX, "X");
+    tractSlider(VocalTract::TCY, "Y");
+
+    ImGui::SeparatorText("Tongue tip");
+    tractSlider(VocalTract::TTX, "X");
+    tractSlider(VocalTract::TTY, "Y");
+
+    ImGui::SeparatorText("Tongue blade");
+    tractSlider(VocalTract::TBX, "X");
+    tractSlider(VocalTract::TBY, "Y");
+
+    ImGui::SeparatorText("Tongue root");
+    tractSlider(VocalTract::TRX, "X");
+    tractSlider(VocalTract::TRY, "Y");
+
+    ImGui::SeparatorText("Tongue side elevation");
+    tractSlider(VocalTract::TS1, "1");
+    tractSlider(VocalTract::TS2, "2");
+    tractSlider(VocalTract::TS3, "3");
+
+    ImGui::PopItemWidth();
   }
 
   // ---- Glottis -------------------------------------------------------------
