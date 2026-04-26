@@ -285,6 +285,15 @@ else()
   target_link_libraries(VocalTractLabApiObj PUBLIC OpenAL::OpenAL)
 endif()
 
+# The vtl/* code is upstream Birkholz source; on macOS it triggers
+# -Wdeprecated-declarations from Apple retiring OpenAL (in io/SoundLib.cpp)
+# and from libc retiring sprintf (used across anatomy/glottis/io/synthesis/
+# phonetics). Suppress for this target so we aren't carrying divergent
+# patches over upstream just to silence Apple's deprecation pressure.
+if(APPLE)
+  target_compile_options(VocalTractLabApiObj PRIVATE -Wno-deprecated-declarations)
+endif()
+
 # The C API shared library is consumed by the MATLAB / Python examples and
 # cannot be a meaningful artifact in the browser; skip it on Emscripten.
 if(NOT EMSCRIPTEN)
@@ -417,6 +426,18 @@ if(VTL_BUILD_LIVE)
         MACOSX_BUNDLE_BUNDLE_VERSION       "${PROJECT_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
       )
+      # main.cpp talks to OpenGL (deprecated since 10.14) and AudioEngine.cpp
+      # talks to OpenAL (deprecated since 10.15). Apple ships an opt-out for
+      # OpenGL via GL_SILENCE_DEPRECATION; OpenAL has no such macro, so the
+      # warning has to be silenced at the compiler-flag level too.
+      target_compile_definitions(vtl_live PRIVATE GL_SILENCE_DEPRECATION=1)
+      target_compile_options(vtl_live PRIVATE -Wno-deprecated-declarations)
+      # vcpkg's imgui::imgui pulls glfw3 transitively (its impl_glfw backend
+      # depends on it); we also link `glfw` explicitly because main.cpp uses
+      # GLFW directly. ld64 then sees libglfw3.a twice on the command line
+      # and warns. The dup is harmless — symbols deduplicate — so silence the
+      # warning rather than restructuring the link graph.
+      target_link_options(vtl_live PRIVATE LINKER:-no_warn_duplicate_libraries)
       set(LIVE_BUNDLE_RESOURCE_FILES "")
       foreach(REL ${RUNTIME_DATA_FILES})
         list(APPEND LIVE_BUNDLE_RESOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/data/${REL}")
