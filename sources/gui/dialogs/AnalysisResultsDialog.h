@@ -51,6 +51,7 @@ public:
 
 public:
   static AnalysisResultsDialog *getInstance();
+  ~AnalysisResultsDialog();
   void updateWidgets();
 
   // **************************************************************************

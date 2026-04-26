@@ -142,6 +142,17 @@ AnalysisResultsDialog::AnalysisResultsDialog(wxWindow *parent) :
 
 
 // ****************************************************************************
+/// Destructor. Frees the popup menu, which has no parent and is therefore
+/// not reclaimed by wxWidgets.
+// ****************************************************************************
+
+AnalysisResultsDialog::~AnalysisResultsDialog()
+{
+  delete contextMenu;
+}
+
+
+// ****************************************************************************
 /// Init the widgets.
 // ****************************************************************************
 
