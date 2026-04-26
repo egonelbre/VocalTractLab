@@ -142,8 +142,16 @@ void buildDefaultDockLayout(ImGuiID dockspace_id) {
   ImGuiID rtTract3dId, rtVowelId;
   ImGui::DockBuilderSplitNode(rtRest, ImGuiDir_Left, 0.5f, &rtTract3dId,
                               &rtVowelId);
-  ImGui::DockBuilderDockWindow("Controls", leftId);
-  ImGui::DockBuilderDockWindow("Tract Shapes", leftId);
+  // Split the left strip into Tract Shapes (top) and Controls (bottom).
+  // Tract Shapes is button-dense and reads well in a constrained box;
+  // the Controls sliders need the full panel width regardless, so the
+  // bottom half gives them enough vertical room for the Articulation
+  // and Glottis sections.
+  ImGuiID leftTopId, leftBottomId;
+  ImGui::DockBuilderSplitNode(leftId, ImGuiDir_Up, 0.5f, &leftTopId,
+                              &leftBottomId);
+  ImGui::DockBuilderDockWindow("Tract Shapes", leftTopId);
+  ImGui::DockBuilderDockWindow("Controls", leftBottomId);
   ImGui::DockBuilderDockWindow("Vocal Tract", rtTract2dId);
   ImGui::DockBuilderDockWindow("Vocal Tract 3D", rtTract3dId);
   ImGui::DockBuilderDockWindow("Vowel Chart", rtVowelId);
