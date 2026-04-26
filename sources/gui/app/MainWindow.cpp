@@ -722,6 +722,7 @@ void MainWindow::OnCloseWindow(wxCloseEvent &event)
     data->writeConfig();
     // The destructor of config will actually save the data.
     delete data->config;
+    data->config = NULL;
 
     // **************************************************************
     // Close all hidden dialogs.
@@ -740,8 +741,14 @@ void MainWindow::OnCloseWindow(wxCloseEvent &event)
     AnnotationDialog::getInstance(NULL)->Close(true);
     PoleZeroDialog::getInstance()->Close(true);
     TransitionDialog::getInstance()->Close(true);
+    if (data->formantOptimizationDialog != NULL)
+    {
+      data->formantOptimizationDialog->Close(true);
+      data->formantOptimizationDialog = NULL;
+    }
 
     this->Destroy();
+    Data::shutdown();
     exit(0);
   }
 }

@@ -335,6 +335,7 @@ public:
 
 public:
   static Data *getInstance();
+  static void shutdown();
   void init(const wxString &arg0);
   void readConfig();
   void writeConfig();
@@ -428,6 +429,7 @@ private:
 
 private:
   Data();
+  ~Data();
 };
 
 #endif

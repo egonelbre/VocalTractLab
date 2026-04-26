@@ -84,6 +84,17 @@ Data *Data::getInstance()
 }
 
 // ****************************************************************************
+/// Releases the singleton instance. Call once during application shutdown,
+/// after dependent dialogs and child widgets have been closed.
+// ****************************************************************************
+
+void Data::shutdown()
+{
+  delete instance;
+  instance = NULL;
+}
+
+// ****************************************************************************
 /// Init the data. This function must be called once after the first call of
 /// getInstance().
 /// \param arg0 The first string parameter passed to this program.
@@ -4355,6 +4366,50 @@ void Data::test2()
 Data::Data()
 {
   // Do nothing. Initialization is done in init().
+}
+
+// ****************************************************************************
+/// Destructor. Frees everything allocated in init(). The wxFileConfig and the
+/// FormantOptimizationDialog are released earlier in MainWindow::OnCloseWindow
+/// while wxWidgets is still fully alive.
+// ****************************************************************************
+
+Data::~Data()
+{
+  delete vocalTract;
+  delete tlModel;
+  delete poleZeroPlan;
+  delete anatomyParams;
+
+  delete primarySpectrum;
+  delete poleZeroSpectrum;
+
+  for (int i = 0; i < NUM_TRACKS; i++)
+  {
+    delete track[i];
+  }
+
+  delete currWindow;
+
+  delete f0EstimatorYin;
+  delete voiceQualityEstimator;
+
+  delete userSpectrum;
+  delete tdsSpectrum;
+
+  delete tdsModel;
+
+  for (int i = 0; i < NUM_GLOTTIS_MODELS; i++)
+  {
+    delete glottis[i];
+  }
+
+  delete staticPhone;
+  delete gesturalScore;
+  delete synthesizer;
+
+  delete segmentSequence;
+  delete gsTimeAxisGraph;
 }
 
 // ****************************************************************************
