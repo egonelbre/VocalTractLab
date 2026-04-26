@@ -251,6 +251,19 @@ if(APPLE)
   set_source_files_properties(${EXAMPLE_FILES} PROPERTIES
     MACOSX_PACKAGE_LOCATION "Resources/Examples"
   )
+
+  # Re-sign the bundle ad-hoc after Resources/ is fully staged. The
+  # linker emits an "adhoc, linker-signed" signature on the Mach-O at
+  # link time, which only covers the binary itself — leaving the
+  # bundle with `Sealed Resources=none` and breaking `spctl --assess`.
+  # Doing a plain `codesign --force --sign -` here re-emits the
+  # signature against the populated bundle so the seal covers
+  # Resources/. CI can replace this with a Developer ID signature
+  # later via `codesign --force --options runtime --sign "..."`.
+  add_custom_command(TARGET VocalTractLab2 POST_BUILD
+    COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:VocalTractLab2>"
+    VERBATIM
+  )
 else()
   # Linux/Windows: copy data files next to the built binary so it can be
   # launched in place from build/<preset>/.
@@ -500,6 +513,14 @@ if(VTL_BUILD_LIVE)
       target_sources(vtl_live PRIVATE ${LIVE_BUNDLE_RESOURCE_FILES})
       set_source_files_properties(${LIVE_BUNDLE_RESOURCE_FILES} PROPERTIES
         MACOSX_PACKAGE_LOCATION "Resources"
+      )
+
+      # Re-sign the bundle ad-hoc once Resources/ is fully staged. See
+      # the matching note on VocalTractLab2 for why the linker's
+      # auto-emitted signature alone isn't enough.
+      add_custom_command(TARGET vtl_live POST_BUILD
+        COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:vtl_live>"
+        VERBATIM
       )
     else()
       foreach(REL ${RUNTIME_DATA_FILES})
