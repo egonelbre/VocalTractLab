@@ -30,9 +30,10 @@ constexpr int MAX_FORMANTS = 4;
 // positions use the same xForFreq mapping the curves use, so notes
 // land directly under the harmonic stems they correspond to. Linear
 // Hz means low notes squeeze together at the left and high notes
-// spread out — an honest view of how pitch maps to a linear spectrum.
+// spread out; log Hz makes the keys nearly uniform width — pitch is
+// logarithmic in frequency, so a log axis is the natural fit.
 void drawPianoKeyboard(ImDrawList* dl, ImVec2 kbdMin, ImVec2 kbdMax,
-                       double fMin_Hz, double fMax_Hz) {
+                       double fMin_Hz, double fMax_Hz, bool logFreq) {
   const float kbdW = kbdMax.x - kbdMin.x;
   const float kbdH = kbdMax.y - kbdMin.y;
   if (kbdW < 1.0f || kbdH < 1.0f) return;
@@ -44,7 +45,14 @@ void drawPianoKeyboard(ImDrawList* dl, ImVec2 kbdMin, ImVec2 kbdMax,
   const ImU32 colKeyBorder = IM_COL32(70, 70, 70, 255);
   const ImU32 colKeyText = IM_COL32(60, 60, 60, 255);
 
+  const double logFmin = std::log(fMin_Hz > 0.0 ? fMin_Hz : 1.0);
+  const double logFmax = std::log(fMax_Hz);
+  const double logRange = logFmax - logFmin;
   auto xForFreq = [&](double f) {
+    if (logFreq) {
+      double lf = std::log(f > 1.0 ? f : 1.0);
+      return kbdMin.x + kbdW * (float)((lf - logFmin) / logRange);
+    }
     return kbdMin.x +
            kbdW * (float)((f - fMin_Hz) / (fMax_Hz - fMin_Hz));
   };
@@ -117,8 +125,8 @@ void drawPianoKeyboard(ImDrawList* dl, ImVec2 kbdMin, ImVec2 kbdMax,
 }
 
 void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
-                  VocalTract* uiTract, double f0_Hz, ImVec2 canvasMin,
-                  ImVec2 canvasMaxFull) {
+                  VocalTract* uiTract, double f0_Hz, bool logFreq,
+                  ImVec2 canvasMin, ImVec2 canvasMaxFull) {
   // Reserve a strip at the bottom for the piano keyboard. Spectrum
   // curves, axis labels, and stems all use canvasMax (shrunk) so they
   // never overlap the keyboard band.
@@ -144,15 +152,34 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   const ImU32 colBorder = ImGui::GetColorU32(ImGuiCol_Border);
   dl->AddRectFilled(canvasMin, canvasMax, colBg);
 
-  const double fMin_Hz = 0.0;
+  // Log mode needs a non-zero lower bound (log(0) = -inf). 50 Hz sits
+  // below typical singing F0 (~80 Hz) and below the lowest piano A0
+  // (~27.5 Hz still falls outside, but A0 is below the human voice
+  // anyway and would just be an off-scale stub).
+  const double fMin_Hz = logFreq ? 50.0 : 0.0;
   const double fMax_Hz = 8000.0;
   const double dbMin = -90.0;
   const double dbMax = 0.0;
   const double freqStep_Hz = (double)AUDIO_SAMPLING_RATE_HZ / (double)FFT_LEN;
+  const double logFmin = std::log(logFreq ? fMin_Hz : 1.0);
+  const double logFmax = std::log(fMax_Hz);
+  const double logRange = logFmax - logFmin;
 
   auto xForFreq = [&](double f) {
+    if (logFreq) {
+      double lf = std::log(f > 1.0 ? f : 1.0);
+      return canvasMin.x + canvasW * (float)((lf - logFmin) / logRange);
+    }
     return canvasMin.x +
            canvasW * (float)((f - fMin_Hz) / (fMax_Hz - fMin_Hz));
+  };
+  // Inverse: pixel column -> Hz. Curve sampling loops use this so a
+  // single per-pixel step covers an even slice of the displayed axis,
+  // not just of frequency.
+  auto freqForPx = [&](int px) {
+    double t = (double)px / (double)canvasW;
+    if (logFreq) return std::exp(logFmin + logRange * t);
+    return fMin_Hz + (fMax_Hz - fMin_Hz) * t;
   };
   auto yForDb = [&](double db) {
     if (db < dbMin) db = dbMin;
@@ -161,13 +188,27 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
            canvasH * (float)((db - dbMin) / (dbMax - dbMin));
   };
 
-  // Grid + axis labels.
-  for (int khz = 1; khz < (int)(fMax_Hz / 1000.0); ++khz) {
-    float x = xForFreq((double)khz * 1000.0);
-    dl->AddLine(ImVec2(x, canvasMin.y), ImVec2(x, canvasMax.y), colGrid, 1.0f);
-    char label[16];
-    std::snprintf(label, sizeof(label), "%dk", khz);
-    dl->AddText(ImVec2(x + 2.0f, canvasMax.y - 14.0f), colText, label);
+  // Frequency grid + axis labels. Linear mode uses kHz multiples; log
+  // mode uses the standard "audio decade" set so each gridline lands at
+  // a familiar frequency rather than at log(N).
+  if (logFreq) {
+    static const double gridFreqs[] = {100, 200, 500, 1000, 2000, 5000};
+    static const char* gridLabels[] = {"100", "200", "500", "1k", "2k", "5k"};
+    for (int i = 0; i < (int)(sizeof(gridFreqs) / sizeof(gridFreqs[0])); ++i) {
+      double f = gridFreqs[i];
+      if (f < fMin_Hz || f > fMax_Hz) continue;
+      float x = xForFreq(f);
+      dl->AddLine(ImVec2(x, canvasMin.y), ImVec2(x, canvasMax.y), colGrid, 1.0f);
+      dl->AddText(ImVec2(x + 2.0f, canvasMax.y - 14.0f), colText, gridLabels[i]);
+    }
+  } else {
+    for (int khz = 1; khz < (int)(fMax_Hz / 1000.0); ++khz) {
+      float x = xForFreq((double)khz * 1000.0);
+      dl->AddLine(ImVec2(x, canvasMin.y), ImVec2(x, canvasMax.y), colGrid, 1.0f);
+      char label[16];
+      std::snprintf(label, sizeof(label), "%dk", khz);
+      dl->AddText(ImVec2(x + 2.0f, canvasMax.y - 14.0f), colText, label);
+    }
   }
   for (double db = dbMin + 20.0; db < dbMax; db += 20.0) {
     float y = yForDb(db);
@@ -236,7 +277,7 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
     vttfPts.reserve((int)canvasW + 1);
     const double mag0 = 1e-9;
     for (int px = 0; px <= (int)canvasW; ++px) {
-      double f = fMin_Hz + (fMax_Hz - fMin_Hz) * (double)px / (double)canvasW;
+      double f = freqForPx(px);
       double bin = f / vttfFreqStep;
       int i0 = (int)bin;
       if (i0 < 0) i0 = 0;
@@ -265,6 +306,7 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
     if (maxHarmonic > 200) maxHarmonic = 200;  // avoid pathological loops
     for (int n = 1; n <= maxHarmonic; ++n) {
       double f = (double)n * f0_Hz;
+      if (f < fMin_Hz) continue;  // log mode trims sub-50-Hz harmonics
       float x = xForFreq(f);
       bool isFundamental = (n == 1);
       ImU32 col = isFundamental ? colFundamental : colHarmonic;
@@ -305,7 +347,7 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   pts.reserve((int)canvasW + 1);
   const double mag0 = 1e-6;
   for (int px = 0; px <= (int)canvasW; ++px) {
-    double f = fMin_Hz + (fMax_Hz - fMin_Hz) * (double)px / (double)canvasW;
+    double f = freqForPx(px);
     double bin = f / freqStep_Hz;
     int i0 = (int)bin;
     if (i0 < 0) i0 = 0;
@@ -347,7 +389,7 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   // canvas (canvasMaxFull) for its lower bound.
   if (canvasMaxFull.y > canvasMax.y + 1.0f) {
     drawPianoKeyboard(dl, ImVec2(canvasMin.x, canvasMax.y), canvasMaxFull,
-                      fMin_Hz, fMax_Hz);
+                      fMin_Hz, fMax_Hz, logFreq);
     dl->AddRect(ImVec2(canvasMin.x, canvasMax.y), canvasMaxFull, colBorder);
   }
 }
@@ -357,12 +399,19 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
 void renderSpectrumPanel(AudioHistory& history, ComplexSignal& fft,
                          VocalTract* uiTract, double f0_Hz) {
   ImGui::Begin("Primary Spectrum");
+
+  // Frequency-axis mode. Static so the user's choice persists across
+  // frames. Linear by default to match the existing behavior; log gives
+  // pitch-uniform spacing that pairs naturally with the piano keyboard.
+  static bool s_logFreq = false;
+  ImGui::Checkbox("Log frequency", &s_logFreq);
+
   ImVec2 avail = ImGui::GetContentRegionAvail();
   ImVec2 pos = ImGui::GetCursorScreenPos();
   ImVec2 canvasMin = pos;
   ImVec2 canvasMax = ImVec2(pos.x + avail.x, pos.y + avail.y);
   drawSpectrum(ImGui::GetWindowDrawList(), history, fft, uiTract, f0_Hz,
-               canvasMin, canvasMax);
+               s_logFreq, canvasMin, canvasMax);
   ImGui::Dummy(avail);
   ImGui::End();
 }
