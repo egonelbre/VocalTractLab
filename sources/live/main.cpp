@@ -15,7 +15,6 @@
 //   VocalTract3DPanel    — software-projected wireframe
 //   VowelChartPanel      — F1/F2 vowel chart, click/drag to morph tract
 //   SpectrumPanel        — FFT-based primary spectrum + VTTF + formants
-//   SpectrogramPanel     — STFT time-frequency view of recent audio
 //   LfPulsePanel         — reference LF glottal pulse + derivative
 //
 // AudioEngine wraps the synthesizer + OpenAL queue and runs either on a
@@ -29,7 +28,6 @@
 #include "AudioEngine.h"
 #include "ControlsPanel.h"
 #include "LfPulsePanel.h"
-#include "SpectrogramPanel.h"
 #include "SpectrumPanel.h"
 #include "VocalTract2DPanel.h"
 #include "VocalTract3DPanel.h"
@@ -90,7 +88,6 @@ void buildDefaultDockLayout(ImGuiID dockspace_id) {
   ImGui::DockBuilderDockWindow("Vocal Tract 3D", rtTract3dId);
   ImGui::DockBuilderDockWindow("Vowel Chart", rtVowelId);
   ImGui::DockBuilderDockWindow("Primary Spectrum", rightBottomId);
-  ImGui::DockBuilderDockWindow("Spectrogram", rightBottomId);
   ImGui::DockBuilderDockWindow("Glottal Pulse", rightBottomId);
   ImGui::DockBuilderFinish(dockspace_id);
 }
@@ -136,7 +133,6 @@ void frameTick() {
   live::renderVocalTract3DPanel(engine.uiTract());
   live::renderSpectrumPanel(engine.history, fftBuf, engine.uiTract(),
                            snap.f0_Hz);
-  live::renderSpectrogramPanel(engine.history, snap.f0_Hz);
   live::renderLfPulsePanel(snap.f0_Hz);
   live::writeFrameSnapshot(engine, snap);
 

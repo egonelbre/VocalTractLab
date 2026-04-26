@@ -355,7 +355,6 @@ if(VTL_BUILD_LIVE)
     sources/live/ControlPoints.cpp
     sources/live/ControlsPanel.cpp
     sources/live/LfPulsePanel.cpp
-    sources/live/SpectrogramPanel.cpp
     sources/live/SpectrumPanel.cpp
     sources/live/TractView.cpp
     sources/live/VocalTract2DPanel.cpp
