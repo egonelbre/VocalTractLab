@@ -5,6 +5,7 @@
 #include <limits>
 #include <vector>
 
+#include "TractView.h"
 #include "anatomy/Surface.h"
 #include "anatomy/VocalTract.h"
 #include "core/Geometry.h"
@@ -17,7 +18,7 @@ namespace {
 struct Camera3D {
   float yaw_deg = 25.0f;
   float pitch_deg = 12.0f;
-  float distance_cm = 30.0f;  // > 0; smaller = bigger model on screen
+  float distance_cm = 0.0f;  // 0 = auto-fit on first frame
 };
 
 struct Projected3D {
@@ -26,12 +27,13 @@ struct Projected3D {
   bool visible;
 };
 
-Projected3D project3D(const Camera3D& cam, Point3D p, ImVec2 canvasCenter,
-                      float focal_px) {
-  // Recenter the model so it rotates around its bounding-box centre.
-  double x = p.x - (-2.0);
-  double y = p.y - (-4.0);
-  double z = p.z;
+Projected3D project3D(const Camera3D& cam, Point3D p, Point3D modelCenter,
+                      ImVec2 canvasCenter, float focal_px) {
+  // Recenter the model so it rotates around its actual bounding-box
+  // centre, computed each frame from the surface vertices.
+  double x = p.x - modelCenter.x;
+  double y = p.y - modelCenter.y;
+  double z = p.z - modelCenter.z;
   double yaw = (double)cam.yaw_deg * M_PI / 180.0;
   double pitch = (double)cam.pitch_deg * M_PI / 180.0;
   double cy = std::cos(yaw), sy = std::sin(yaw);
@@ -76,7 +78,8 @@ ImU32 fadeColor(ImU32 base, ImU32 toward, float t) {
 }
 
 void drawWireframe(ImDrawList* dl, VocalTract* tract, const Camera3D& cam,
-                   ImVec2 canvasMin, ImVec2 canvasMax, ImU32 bgColor) {
+                   Point3D modelCenter, ImVec2 canvasMin, ImVec2 canvasMax,
+                   ImU32 bgColor) {
   float canvasW = canvasMax.x - canvasMin.x;
   float canvasH = canvasMax.y - canvasMin.y;
   if (canvasW < 4.0f || canvasH < 4.0f) return;
@@ -108,7 +111,7 @@ void drawWireframe(ImDrawList* dl, VocalTract* tract, const Camera3D& cam,
     Surface* s = &tract->surfaces[spec.index];
     for (int rib = 0; rib < s->numRibs; ++rib) {
       for (int rp = 0; rp < s->numRibPoints; ++rp) {
-        Projected3D pj = project3D(cam, s->getVertex(rib, rp), center, focal);
+        Projected3D pj = project3D(cam, s->getVertex(rib, rp), modelCenter, center, focal);
         if (!pj.visible) continue;
         if (pj.depth < zNear) zNear = pj.depth;
         if (pj.depth > zFar) zFar = pj.depth;
@@ -130,7 +133,7 @@ void drawWireframe(ImDrawList* dl, VocalTract* tract, const Camera3D& cam,
       for (int i = 0; i < innerN; ++i) {
         Point3D p = ribsAlongRibPoints ? s->getVertex(o, i)
                                        : s->getVertex(i, o);
-        Projected3D pj = project3D(cam, p, center, focal);
+        Projected3D pj = project3D(cam, p, modelCenter, center, focal);
         if (!pj.visible) {
           if (pts.size() >= 2) {
             for (size_t j = 1; j < pts.size(); ++j) {
@@ -172,7 +175,26 @@ void renderVocalTract3DPanel(VocalTract* tract) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   ImU32 bgColor = ImGui::GetColorU32(ImGuiCol_FrameBg);
   dl->AddRectFilled(canvasMin, canvasMax, bgColor);
-  drawWireframe(dl, tract, cam, canvasMin, canvasMax, bgColor);
+
+  // Use the articulation-extent bounds for both the orbit pivot and
+  // the auto-fit camera distance. This keeps the model framed
+  // consistently across slider movements: the centroid doesn't drift
+  // and the initial zoom doesn't shrink when articulation grows the
+  // live bbox.
+  const TractBounds& bounds = articulationExtentBounds(tract);
+  Point3D modelCenter;
+  modelCenter.x = bounds.cx();
+  modelCenter.y = bounds.cy();
+  modelCenter.z = bounds.cz();
+  if (cam.distance_cm <= 0.0f) {
+    // Distance such that the largest bbox dimension projects to ~70%
+    // of the smaller canvas axis (focal = 0.9 * minDim, so distance =
+    // focal * extent / desiredScreenSpan ≈ 1.3 * extent).
+    cam.distance_cm = (float)(bounds.maxExtent() * 1.3);
+    if (cam.distance_cm < 8.0f) cam.distance_cm = 8.0f;
+  }
+
+  drawWireframe(dl, tract, cam, modelCenter, canvasMin, canvasMax, bgColor);
   dl->AddRect(canvasMin, canvasMax, ImGui::GetColorU32(ImGuiCol_Border));
 
   ImGui::SetCursorScreenPos(canvasMin);
@@ -202,6 +224,8 @@ void renderVocalTract3DPanel(VocalTract* tract) {
       cam.yaw_deg, cam.pitch_deg, cam.distance_cm);
   ImGui::SameLine();
   if (ImGui::SmallButton("reset##cam3d")) {
+    // Reset to the sentinel so the auto-fit branch above re-runs next
+    // frame against the current articulation.
     cam = Camera3D{};
   }
 

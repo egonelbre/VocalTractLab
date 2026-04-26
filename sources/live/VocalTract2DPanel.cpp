@@ -252,7 +252,12 @@ void renderVocalTract2DPanel(VocalTract* tract, double* tractParams) {
   ImDrawList* dl = ImGui::GetWindowDrawList();
   dl->AddRectFilled(canvasMin, canvasMax,
                     ImGui::GetColorU32(ImGuiCol_FrameBg));
-  TractView view = computeTractView(canvasMin, canvasMax);
+  // Use the articulation-extent bounds (cached, sampled across slider
+  // ranges) instead of the live bounds so the zoom stays stable while
+  // the user moves sliders — otherwise the view shrinks when e.g. the
+  // hyoid drops and the tract grows past the initial extent.
+  const TractBounds& bounds = articulationExtentBounds(tract);
+  TractView view = computeTractView(canvasMin, canvasMax, bounds);
   drawOutline(dl, tract, view);
 
   // InvisibleButton owns the drag interaction over the canvas.
