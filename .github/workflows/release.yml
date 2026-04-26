@@ -1,0 +1,213 @@
+name: release
+
+# Tag-triggered release pipeline. On `v*` tags:
+#   1. Build the Emscripten/WASM live build → deploy to GitHub Pages and
+#      attach the static-site bundle to the release.
+#   2. Build native binaries for Linux, macOS, and Windows → bundle and
+#      attach them to the release.
+#   3. Create / update the GitHub Release for the tag.
+#
+# Native builds use the existing vcpkg-based CMake presets. vcpkg's
+# binary cache is wired into the GitHub Actions cache so wxWidgets et
+# al. only compile from source on the very first run per platform.
+#
+# Security note: this workflow does not consume any user-controlled
+# github.event fields (issue/PR titles, commit messages, etc.) in
+# `run:` steps, so the standard "workflow injection" risks do not
+# apply here. All ${{ ... }} substitutions reference workflow-defined
+# matrix entries or trusted internal step outputs.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+jobs:
+  wasm:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+          actions-cache-folder: emsdk-cache
+
+      - name: Configure (wasm preset)
+        run: cmake --preset wasm
+
+      - name: Build vtl_live
+        run: cmake --build --preset wasm
+
+      - name: Stage Pages site
+        # Emscripten emits vtl_live.{html,js,wasm,data}. The .js/.wasm/.data
+        # references inside the HTML are by basename, so renaming the HTML
+        # to index.html keeps the relative loads working. .nojekyll
+        # disables Jekyll, which would otherwise drop files that start
+        # with an underscore.
+        run: |
+          mkdir -p site
+          cp build/wasm/vtl_live.html  site/index.html
+          cp build/wasm/vtl_live.js    site/
+          cp build/wasm/vtl_live.wasm  site/
+          cp build/wasm/vtl_live.data  site/
+          touch site/.nojekyll
+
+      - name: Stage release tarball
+        run: |
+          mkdir -p artifacts
+          tar -C build/wasm -czf "artifacts/vtl_live-wasm-${GITHUB_REF_NAME}.tar.gz" \
+            vtl_live.html vtl_live.js vtl_live.wasm vtl_live.data
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-wasm
+          path: artifacts/
+
+  deploy-pages:
+    name: Deploy Pages
+    needs: wasm
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  native:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            preset: linux-release
+            asset_name: vtl-linux-x64
+            archive_ext: tar.gz
+          - os: macos-latest
+            preset: mac-release
+            asset_name: vtl-macos-arm64
+            archive_ext: tar.gz
+          - os: windows-latest
+            preset: win-release
+            asset_name: vtl-windows-x64
+            archive_ext: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Export GitHub Actions cache vars (vcpkg)
+        # Required so VCPKG_BINARY_SOURCES=x-gha,readwrite finds the
+        # cache service from inside the runner.
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Linux deps
+        if: runner.os == 'Linux'
+        # wxWidgets' vcpkg port pulls GTK + Wayland + Mesa headers from
+        # the system. Ninja is preinstalled on ubuntu-latest but listed
+        # here for clarity.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build pkg-config autoconf automake autoconf-archive libtool \
+            libgtk-3-dev libwayland-dev libxkbcommon-dev \
+            libegl1-mesa-dev libgles2-mesa-dev libgl1-mesa-dev libglu1-mesa-dev \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+            libdbus-1-dev libsecret-1-dev libsystemd-dev libibus-1.0-dev
+
+      - name: Mac deps
+        if: runner.os == 'macOS'
+        run: brew install ninja autoconf automake autoconf-archive libtool
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Stage artifacts (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p staging
+          cp build/linux-release/vtl_live           staging/ 2>/dev/null || true
+          cp build/linux-release/VocalTractLab2     staging/ 2>/dev/null || true
+          cp -r data                                staging/ 2>/dev/null || true
+          mkdir -p artifacts
+          tar -C staging -czf "artifacts/${{ matrix.asset_name }}-${GITHUB_REF_NAME}.${{ matrix.archive_ext }}" .
+
+      - name: Stage artifacts (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p staging
+          cp -R build/mac-release/vtl_live.app          staging/ 2>/dev/null || true
+          cp -R build/mac-release/VocalTractLab2.app    staging/ 2>/dev/null || true
+          mkdir -p artifacts
+          tar -C staging -czf "artifacts/${{ matrix.asset_name }}-${GITHUB_REF_NAME}.${{ matrix.archive_ext }}" .
+
+      - name: Stage artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $staging = "staging"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          Get-ChildItem -Path build/win-release -Recurse -Include vtl_live.exe,VocalTractLab2.exe,*.dll |
+            ForEach-Object { Copy-Item $_.FullName -Destination $staging }
+          if (Test-Path data) { Copy-Item -Recurse data $staging }
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          $asset = "artifacts/${{ matrix.asset_name }}-$env:GITHUB_REF_NAME.${{ matrix.archive_ext }}"
+          Compress-Archive -Path "$staging/*" -DestinationPath $asset
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.asset_name }}
+          path: artifacts/
+
+  release:
+    name: Publish Release
+    needs: [wasm, native]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: release-*
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: false
