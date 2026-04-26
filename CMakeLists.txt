@@ -323,6 +323,7 @@ if(VTL_BUILD_LIVE)
     sources/live/AudioEngine.cpp
     sources/live/ControlPoints.cpp
     sources/live/ControlsPanel.cpp
+    sources/live/LfPulsePanel.cpp
     sources/live/SpectrogramPanel.cpp
     sources/live/SpectrumPanel.cpp
     sources/live/TractView.cpp
