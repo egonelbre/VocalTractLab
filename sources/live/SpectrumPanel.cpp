@@ -25,9 +25,108 @@ constexpr int VTTF_LEN_EXPONENT = 12;
 constexpr int VTTF_LEN = 1 << VTTF_LEN_EXPONENT;
 constexpr int MAX_FORMANTS = 4;
 
+// Piano keyboard strip rendered along the bottom of the panel as a
+// frequency reference. Drawn below the spectrum plotting area; key
+// positions use the same xForFreq mapping the curves use, so notes
+// land directly under the harmonic stems they correspond to. Linear
+// Hz means low notes squeeze together at the left and high notes
+// spread out — an honest view of how pitch maps to a linear spectrum.
+void drawPianoKeyboard(ImDrawList* dl, ImVec2 kbdMin, ImVec2 kbdMax,
+                       double fMin_Hz, double fMax_Hz) {
+  const float kbdW = kbdMax.x - kbdMin.x;
+  const float kbdH = kbdMax.y - kbdMin.y;
+  if (kbdW < 1.0f || kbdH < 1.0f) return;
+
+  // Conventional piano colors so the strip reads correctly under both
+  // light and dark themes.
+  const ImU32 colWhite = IM_COL32(225, 225, 220, 255);
+  const ImU32 colBlack = IM_COL32(25, 25, 25, 255);
+  const ImU32 colKeyBorder = IM_COL32(70, 70, 70, 255);
+  const ImU32 colKeyText = IM_COL32(60, 60, 60, 255);
+
+  auto xForFreq = [&](double f) {
+    return kbdMin.x +
+           kbdW * (float)((f - fMin_Hz) / (fMax_Hz - fMin_Hz));
+  };
+  // MIDI -> Hz, MIDI 69 = A4 = 440 Hz.
+  auto noteFreq = [](int midi) {
+    return 440.0 * std::pow(2.0, (midi - 69) / 12.0);
+  };
+  // Black keys are at scale degrees C#, D#, F#, G#, A#.
+  auto isBlack = [](int midi) {
+    int n = ((midi % 12) + 12) % 12;
+    return n == 1 || n == 3 || n == 6 || n == 8 || n == 10;
+  };
+
+  // Background fill — white keys are drawn via the gaps between black
+  // keys plus this base layer, with vertical separators.
+  dl->AddRectFilled(kbdMin, kbdMax, colWhite);
+
+  // MIDI 12 = C0 (≈16.35 Hz); MIDI 119 = B8 (≈7902 Hz). Covers the
+  // 0–8 kHz spectrum axis with one octave of headroom either side.
+  const int firstMidi = 12;
+  const int lastMidi = 119;
+
+  // White-key separators + C labels.
+  for (int m = firstMidi; m <= lastMidi; ++m) {
+    if (isBlack(m)) continue;
+    double f = noteFreq(m);
+    // Right-edge boundary = midpoint to the next white key in frequency.
+    int nextWhite = m + 1;
+    while (nextWhite <= lastMidi && isBlack(nextWhite)) ++nextWhite;
+    if (nextWhite > lastMidi) continue;
+    double fNext = noteFreq(nextWhite);
+    float xRight = xForFreq((f + fNext) / 2.0);
+    if (xRight < kbdMin.x || xRight > kbdMax.x) continue;
+    dl->AddLine(ImVec2(xRight, kbdMin.y), ImVec2(xRight, kbdMax.y),
+                colKeyBorder, 1.0f);
+
+    if (m % 12 == 0) {
+      // Left edge of this white key for label placement.
+      int prevWhite = m - 1;
+      while (prevWhite >= firstMidi && isBlack(prevWhite)) --prevWhite;
+      double fPrev = (prevWhite >= firstMidi) ? noteFreq(prevWhite) : f;
+      float xLeft = xForFreq((f + fPrev) / 2.0);
+      if (xLeft < kbdMin.x) xLeft = kbdMin.x;
+      // Skip the label if the key is too narrow to read.
+      if (xRight - xLeft >= 12.0f) {
+        char lbl[8];
+        std::snprintf(lbl, sizeof(lbl), "C%d", m / 12 - 1);
+        dl->AddText(ImVec2(xLeft + 2.0f, kbdMin.y + kbdH - 12.0f),
+                    colKeyText, lbl);
+      }
+    }
+  }
+
+  // Black keys on top of the white key band, occupying the upper 60 %
+  // of the strip height, centered between adjacent semitones.
+  const float blackBottom = kbdMin.y + kbdH * 0.60f;
+  for (int m = firstMidi; m <= lastMidi; ++m) {
+    if (!isBlack(m)) continue;
+    double f = noteFreq(m);
+    double fPrev = noteFreq(m - 1);
+    double fNext = noteFreq(m + 1);
+    float xLeft = xForFreq((f + fPrev) / 2.0);
+    float xRight = xForFreq((f + fNext) / 2.0);
+    if (xRight < kbdMin.x || xLeft > kbdMax.x) continue;
+    if (xLeft < kbdMin.x) xLeft = kbdMin.x;
+    if (xRight > kbdMax.x) xRight = kbdMax.x;
+    dl->AddRectFilled(ImVec2(xLeft, kbdMin.y),
+                      ImVec2(xRight, blackBottom), colBlack);
+  }
+}
+
 void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
                   VocalTract* uiTract, double f0_Hz, ImVec2 canvasMin,
-                  ImVec2 canvasMax) {
+                  ImVec2 canvasMaxFull) {
+  // Reserve a strip at the bottom for the piano keyboard. Spectrum
+  // curves, axis labels, and stems all use canvasMax (shrunk) so they
+  // never overlap the keyboard band.
+  const float kbdHeight = 32.0f;
+  ImVec2 canvasMax = canvasMaxFull;
+  if (canvasMaxFull.y - canvasMin.y > kbdHeight + 40.0f) {
+    canvasMax.y = canvasMaxFull.y - kbdHeight;
+  }
   float canvasW = canvasMax.x - canvasMin.x;
   float canvasH = canvasMax.y - canvasMin.y;
   if (canvasW <= 1.0f || canvasH <= 1.0f) return;
@@ -242,6 +341,15 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   }
 
   dl->AddRect(canvasMin, canvasMax, colBorder);
+
+  // Piano keyboard occupies the strip below the spectrum. Drawn last so
+  // its rects sit on top of the panel background but use the full-width
+  // canvas (canvasMaxFull) for its lower bound.
+  if (canvasMaxFull.y > canvasMax.y + 1.0f) {
+    drawPianoKeyboard(dl, ImVec2(canvasMin.x, canvasMax.y), canvasMaxFull,
+                      fMin_Hz, fMax_Hz);
+    dl->AddRect(ImVec2(canvasMin.x, canvasMax.y), canvasMaxFull, colBorder);
+  }
 }
 
 }  // namespace
