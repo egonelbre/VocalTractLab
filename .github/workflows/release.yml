@@ -132,12 +132,14 @@ jobs:
       - name: Linux deps
         if: runner.os == 'Linux'
         # wxWidgets' vcpkg port pulls GTK + Wayland + Mesa headers from
-        # the system. Ninja is preinstalled on ubuntu-latest but listed
-        # here for clarity.
+        # the system. curl/zip/unzip/tar are needed by vcpkg bootstrap;
+        # ubuntu-latest has them pre-installed but listing them keeps
+        # this workflow runnable on slimmer images.
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             ninja-build pkg-config autoconf automake autoconf-archive libtool \
+            curl zip unzip tar \
             libgtk-3-dev libwayland-dev libxkbcommon-dev \
             libegl1-mesa-dev libgles2-mesa-dev libgl1-mesa-dev libglu1-mesa-dev \
             libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
@@ -147,8 +149,30 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ninja autoconf automake autoconf-archive libtool
 
+      - name: Bootstrap vcpkg
+        # Pre-running bootstrap surfaces any failure directly in the
+        # workflow log instead of behind cmake's "see vcpkg-bootstrap.log"
+        # message. Idempotent — cmake will skip re-bootstrapping.
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ./third_party/vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          else
+            ./third_party/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          fi
+
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
+
+      - name: Show vcpkg bootstrap log on failure
+        if: failure()
+        shell: bash
+        run: |
+          log="build/${{ matrix.preset }}/vcpkg-bootstrap.log"
+          if [ -f "$log" ]; then
+            echo "=== $log ==="
+            cat "$log"
+          fi
 
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}

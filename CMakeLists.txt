@@ -19,6 +19,17 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   add_compile_options($<$<NOT:$<CONFIG:Debug>>:-fno-math-errno>)
 endif()
 
+# MSVC: disable std::byte. The vtl/* sources pervasively `using namespace
+# std;` and also pull in Windows SDK headers (rpcndr.h, wtypes.h, …) that
+# define `byte` as `unsigned char`. With std::byte enabled and brought
+# into the unqualified namespace, every Windows header that mentions
+# `byte` triggers `error C2872: 'byte': ambiguous symbol`. The codebase
+# does not use std::byte itself, so disabling it is safe and avoids
+# touching every TU.
+if(MSVC)
+  add_compile_definitions(_HAS_STD_BYTE=0)
+endif()
+
 # EXPERIMENT: -ffast-math lets the compiler reorder FP ops, fuse FMAs,
 # treat negative zero as zero, assume no NaN/Inf, etc. Big potential win
 # (vectorization, FMA, hoisting) but breaks bit-exact reproducibility.
