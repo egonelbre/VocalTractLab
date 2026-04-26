@@ -19,15 +19,26 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   add_compile_options($<$<NOT:$<CONFIG:Debug>>:-fno-math-errno>)
 endif()
 
-# MSVC: disable std::byte. The vtl/* sources pervasively `using namespace
-# std;` and also pull in Windows SDK headers (rpcndr.h, wtypes.h, …) that
-# define `byte` as `unsigned char`. With std::byte enabled and brought
-# into the unqualified namespace, every Windows header that mentions
-# `byte` triggers `error C2872: 'byte': ambiguous symbol`. The codebase
-# does not use std::byte itself, so disabling it is safe and avoids
-# touching every TU.
+# MSVC: project-wide compile definitions so every target compiling the
+# vtl/* sources sees a consistent set, instead of relying on per-target
+# adds that the wxWidgets GUI target was missing.
+#   _HAS_STD_BYTE=0    — disables std::byte. The vtl sources pervasively
+#                        `using namespace std;` and also pull in Windows
+#                        SDK headers (rpcndr.h, wtypes.h, …) that define
+#                        `byte` as unsigned char; both reaching the
+#                        unqualified namespace at once produces
+#                        `error C2872: 'byte': ambiguous symbol`. The
+#                        codebase does not use std::byte itself.
+#   _USE_MATH_DEFINES  — enables M_PI / M_E / etc. in <cmath>. Multiple
+#                        vtl translation units use M_PI directly.
+#   _CRT_SECURE_NO_WARNINGS — silences the deprecation warnings on the
+#                        upstream Birkholz code's use of strcpy/sprintf.
 if(MSVC)
-  add_compile_definitions(_HAS_STD_BYTE=0)
+  add_compile_definitions(
+    _HAS_STD_BYTE=0
+    _USE_MATH_DEFINES
+    _CRT_SECURE_NO_WARNINGS
+  )
 endif()
 
 # EXPERIMENT: -ffast-math lets the compiler reorder FP ops, fuse FMAs,
