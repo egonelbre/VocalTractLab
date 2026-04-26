@@ -34,6 +34,20 @@ concurrency:
 
 env:
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  # macOS Developer ID signing + notarization. Disabled until the
+  # secrets below are configured in the repository — flip this to
+  # "true" to enable. The seven secrets needed:
+  #   APPLE_CERT_P12_BASE64      Developer ID Application cert + key
+  #                              exported as p12, then `base64 -i ...`
+  #   APPLE_CERT_PASSWORD        Password used during the p12 export
+  #   APPLE_TEAM_ID              10-char team identifier
+  #   APPLE_DEVELOPER_NAME       Common name on the cert, e.g.
+  #                              "Egon Elbre"
+  #   APPLE_NOTARY_KEY_ID        App Store Connect API key id
+  #   APPLE_NOTARY_KEY_ISSUER    API key issuer UUID
+  #   APPLE_NOTARY_KEY_BASE64    .p8 private key for the API key,
+  #                              base64-encoded
+  MACOS_SIGNING_ENABLED: "false"
 
 jobs:
   wasm:
@@ -197,6 +211,97 @@ jobs:
 
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Import Developer ID certificate (macOS)
+        if: runner.os == 'macOS' && env.MACOS_SIGNING_ENABLED == 'true'
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD:   ${{ secrets.APPLE_CERT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Build a temporary keychain so the cert lives only for this
+          # job and doesn't taint the runner's default keychain. Using a
+          # random keychain password (uuidgen) means the password never
+          # has to be a secret — it's regenerated each run.
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+
+          printf '%s' "$APPLE_CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" \
+            -P "$APPLE_CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          # Make the temp keychain searchable in addition to whatever
+          # the runner already had on the search list.
+          security list-keychains -d user -s "$KEYCHAIN_PATH" \
+            $(security list-keychains -d user | tr -d '"')
+          # Allow codesign to use the imported key without an interactive
+          # prompt (CI has no TTY).
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          rm -f "$CERT_PATH"
+
+      - name: Sign macOS bundles
+        if: runner.os == 'macOS' && env.MACOS_SIGNING_ENABLED == 'true'
+        env:
+          APPLE_TEAM_ID:        ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_DEVELOPER_NAME: ${{ secrets.APPLE_DEVELOPER_NAME }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The CMake build already attaches an ad-hoc signature with
+          # Resources sealed; --force replaces it with the Developer ID
+          # signature. --options runtime enables the hardened runtime,
+          # which notarization requires. --timestamp pulls a secure
+          # timestamp from Apple's server (also a notarization
+          # requirement).
+          SIGN_ID="Developer ID Application: $APPLE_DEVELOPER_NAME ($APPLE_TEAM_ID)"
+          for app in build/mac-release/vtl_live.app build/mac-release/VocalTractLab2.app; do
+            [ -d "$app" ] || continue
+            codesign --force --options runtime --timestamp \
+              --sign "$SIGN_ID" "$app"
+            codesign --verify --strict --verbose=2 "$app"
+          done
+
+      - name: Notarize macOS bundles
+        if: runner.os == 'macOS' && env.MACOS_SIGNING_ENABLED == 'true'
+        env:
+          APPLE_NOTARY_KEY_ID:     ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_KEY_ISSUER: ${{ secrets.APPLE_NOTARY_KEY_ISSUER }}
+          APPLE_NOTARY_KEY_BASE64: ${{ secrets.APPLE_NOTARY_KEY_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Notarization happens against a zip; the notary service
+          # extracts and inspects the bundle, then publishes a ticket.
+          # `stapler staple` writes the ticket back into the .app so
+          # the bundle works offline (Gatekeeper checks the staple
+          # without contacting Apple).
+          KEY_PATH="$RUNNER_TEMP/notary.p8"
+          printf '%s' "$APPLE_NOTARY_KEY_BASE64" | base64 --decode > "$KEY_PATH"
+          for app in build/mac-release/vtl_live.app build/mac-release/VocalTractLab2.app; do
+            [ -d "$app" ] || continue
+            ZIP_PATH="$RUNNER_TEMP/$(basename "$app").zip"
+            # ditto preserves bundle structure / xattrs better than zip
+            # for .app submissions to the notary service.
+            ditto -c -k --keepParent "$app" "$ZIP_PATH"
+            xcrun notarytool submit "$ZIP_PATH" \
+              --key "$KEY_PATH" \
+              --key-id "$APPLE_NOTARY_KEY_ID" \
+              --issuer "$APPLE_NOTARY_KEY_ISSUER" \
+              --wait
+            xcrun stapler staple "$app"
+            xcrun stapler validate "$app"
+            rm -f "$ZIP_PATH"
+          done
+          rm -f "$KEY_PATH"
 
       - name: Stage artifacts (Linux)
         if: runner.os == 'Linux'
