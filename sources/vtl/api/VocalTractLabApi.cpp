@@ -275,8 +275,14 @@ int vtlClose()
   delete vocalTract;
   delete tube;
 
+  if (tubeGlottis != NULL)
+  {
+    delete tubeGlottis;
+    tubeGlottis = NULL;
+  }
+
   vtlApiInitialized = false;
-  
+
   return 0;
 }
 
