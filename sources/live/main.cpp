@@ -61,6 +61,29 @@ void glfwErrorCallback(int code, const char* msg) {
   std::fprintf(stderr, "glfw error %d: %s\n", code, msg);
 }
 
+#if defined(__EMSCRIPTEN__)
+// Resize the canvas to match the current browser viewport, in device pixels,
+// and tell GLFW about the new size so ImGui's IO.DisplaySize follows. The
+// shell.html sizes the canvas to 100vw/100vh in CSS, but the canvas's
+// internal pixel dimensions (and thus the WebGL framebuffer) are independent
+// — they only change when we set them.
+void syncCanvasToViewport(GLFWwindow* window) {
+  double cssW = 0, cssH = 0;
+  emscripten_get_element_css_size("#canvas", &cssW, &cssH);
+  int w = static_cast<int>(cssW);
+  int h = static_cast<int>(cssH);
+  if (w <= 0 || h <= 0) return;
+  emscripten_set_canvas_element_size("#canvas", w, h);
+  glfwSetWindowSize(window, w, h);
+}
+
+EM_BOOL onBrowserResize(int /*eventType*/, const EmscriptenUiEvent* /*e*/,
+                        void* userData) {
+  syncCanvasToViewport(static_cast<GLFWwindow*>(userData));
+  return EM_FALSE;
+}
+#endif
+
 // Builds a default Controls / Vocal Tract / Vocal Tract 3D / Primary Spectrum
 // layout the first time the dockspace exists. ImGui persists user-dragged
 // arrangements to imgui.ini so this only fires on a fresh install.
@@ -232,6 +255,12 @@ int main(int argc, char** argv) {
   g_app.fftBuf = &fftBuf;
 
 #if defined(__EMSCRIPTEN__)
+  // The shell stretches the canvas across the viewport via CSS, but glfwCreateWindow
+  // hard-set the backing pixel dimensions to 1280x800. Resize once now and
+  // again on every browser resize so ImGui follows the viewport.
+  syncCanvasToViewport(window);
+  emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, window,
+                                 EM_FALSE, onBrowserResize);
   // emscripten owns the event loop in the browser; this returns and the
   // page keeps spinning frameTick at the browser's rAF cadence.
   emscripten_set_main_loop(frameTick, 0, 1);

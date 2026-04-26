@@ -401,6 +401,7 @@ if(VTL_BUILD_LIVE)
       VocalTractLabApiObj
       imgui_static
     )
+    set(VTL_LIVE_SHELL "${CMAKE_CURRENT_SOURCE_DIR}/sources/live/web/shell.html")
     target_link_options(vtl_live PRIVATE
       "SHELL:-sUSE_GLFW=3"
       "SHELL:-sUSE_WEBGL2=1"
@@ -414,7 +415,10 @@ if(VTL_BUILD_LIVE)
       "SHELL:-lopenal"
       "SHELL:-lidbfs.js"
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/JD2.speaker@/JD2.speaker"
+      "SHELL:--shell-file ${VTL_LIVE_SHELL}"
     )
+    # Trigger relink when the shell template changes.
+    set_property(TARGET vtl_live APPEND PROPERTY LINK_DEPENDS "${VTL_LIVE_SHELL}")
     # Emit an .html shell so the build artifact can be opened directly.
     set_target_properties(vtl_live PROPERTIES SUFFIX ".html")
   else()
