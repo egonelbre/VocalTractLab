@@ -22,7 +22,8 @@
 #include "anatomy/AnatomyParams.h"
 #include "dsp/Dsp.h"
 
-VocalTract *AnatomyParams::referenceVocalTract = new VocalTract();
+static VocalTract referenceVocalTractStorage;
+VocalTract *AnatomyParams::referenceVocalTract = &referenceVocalTractStorage;
 
 
 // ****************************************************************************
