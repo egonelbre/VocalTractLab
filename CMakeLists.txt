@@ -368,6 +368,7 @@ if(VTL_BUILD_LIVE)
     sources/live/ControlPoints.cpp
     sources/live/ControlsPanel.cpp
     sources/live/LfPulsePanel.cpp
+    sources/live/PresetsPanel.cpp
     sources/live/SpectrumPanel.cpp
     sources/live/TractView.cpp
     sources/live/VocalTract2DPanel.cpp
@@ -455,6 +456,8 @@ if(VTL_BUILD_LIVE)
       "SHELL:-lopenal"
       "SHELL:-lidbfs.js"
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/JD2.speaker@/JD2.speaker"
+      "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/M01.speaker@/M01.speaker"
+      "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/W02.speaker@/W02.speaker"
       "SHELL:--preload-file ${VTL_LIVE_FONT_FILE}@/NotoSans-Regular.ttf"
       "SHELL:--shell-file ${VTL_LIVE_SHELL}"
     )

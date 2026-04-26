@@ -23,11 +23,14 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <string>
+#include <vector>
 
 #include "AssetPaths.h"
 #include "AudioEngine.h"
 #include "ControlsPanel.h"
 #include "LfPulsePanel.h"
+#include "PresetsPanel.h"
 #include "SpectrumPanel.h"
 #include "VocalTract2DPanel.h"
 #include "VocalTract3DPanel.h"
@@ -54,8 +57,41 @@ struct LabApp {
   GLFWwindow* window = nullptr;
   live::AudioEngine* engine = nullptr;
   ComplexSignal* fftBuf = nullptr;
+  std::vector<live::SpeakerOption> speakers;
 };
 LabApp g_app;
+
+// Resolve the full speaker option list for the segmented switcher.
+// Native: probe each known basename via findRuntimeAsset and include
+// only the ones that actually landed next to the binary. WASM: the
+// CMake --preload-file flag mounts all three at the FS root, so the
+// list is fixed.
+std::vector<live::SpeakerOption> resolveSpeakerOptions(const char* argv0) {
+  struct Known {
+    const char* file;
+    const char* display;
+  };
+  static const Known known[] = {
+      {"JD2.speaker", "JD2"},
+      {"M01.speaker", "M01"},
+      {"W02.speaker", "W02"},
+  };
+  std::vector<live::SpeakerOption> out;
+#if defined(__EMSCRIPTEN__)
+  (void)argv0;
+  for (const Known& k : known) {
+    out.push_back({k.display, std::string("/") + k.file});
+  }
+#else
+  for (const Known& k : known) {
+    std::filesystem::path p = live::findRuntimeAsset(argv0, k.file);
+    if (!p.empty()) {
+      out.push_back({k.display, p.string()});
+    }
+  }
+#endif
+  return out;
+}
 
 void glfwErrorCallback(int code, const char* msg) {
   std::fprintf(stderr, "glfw error %d: %s\n", code, msg);
@@ -107,6 +143,7 @@ void buildDefaultDockLayout(ImGuiID dockspace_id) {
   ImGui::DockBuilderSplitNode(rtRest, ImGuiDir_Left, 0.5f, &rtTract3dId,
                               &rtVowelId);
   ImGui::DockBuilderDockWindow("Controls", leftId);
+  ImGui::DockBuilderDockWindow("Tract Shapes", leftId);
   ImGui::DockBuilderDockWindow("Vocal Tract", rtTract2dId);
   ImGui::DockBuilderDockWindow("Vocal Tract 3D", rtTract3dId);
   ImGui::DockBuilderDockWindow("Vowel Chart", rtVowelId);
@@ -151,6 +188,9 @@ void frameTick() {
   // before the 3D panel reads from it, so they always agree.
   live::FrameSnapshot snap = live::readFrameSnapshot(engine);
   live::renderControlsPanel(engine, snap);
+  // Tract shapes / speaker switcher panel. May call AudioEngine::restart
+  // and re-read snap in place when the user picks a different speaker.
+  live::renderTractShapesPanel(engine, snap, g_app.speakers);
   // Vowel chart runs before the 2D panel so a click/drag in F1/F2 space
   // mutates snap.tractParams before the tract is recalculated and drawn.
   live::renderVowelChartPanel(engine, snap);
@@ -286,6 +326,7 @@ int main(int argc, char** argv) {
   g_app.window = window;
   g_app.engine = &engine;
   g_app.fftBuf = &fftBuf;
+  g_app.speakers = resolveSpeakerOptions(argc > 0 ? argv[0] : "vtl_live");
 
 #if defined(__EMSCRIPTEN__)
   // The shell stretches the canvas across the viewport via CSS, but glfwCreateWindow

@@ -1,0 +1,228 @@
+#include "PresetsPanel.h"
+
+#include <cctype>
+#include <cstring>
+#include <map>
+#include <string>
+#include <vector>
+
+#include "AudioEngine.h"
+#include "ControlsPanel.h"
+#include "anatomy/VocalTract.h"
+#include "imgui.h"
+
+namespace live {
+
+namespace {
+
+// Splits a speaker shape name into a group key + a short button label
+// suitable for tight per-button real estate.
+//
+//   "a"                            → ("vowels",                  "a")
+//   "6_low"                        → ("vowels",                  "6_low")
+//   "i-raw"                        → ("vowels-raw",              "i")
+//   "tt-alveolar-fricative(a)"     → ("tt-alveolar-fricative",   "a")
+//   "tt-alveolar-fricative(a)-raw" → ("tt-alveolar-fricative-raw","a")
+//   "ll-labial-closure(u)"         → ("ll-labial-closure",       "u")
+//
+// The `-raw` suffix is stripped *first*, then the remainder is parsed
+// for the (vowel-context) parens. That way M01-style names like
+// "ll-labial-closure(a)-raw" group with their non-raw cousins under a
+// dedicated raw heading rather than spilling into vowels-raw.
+struct ParsedShape {
+  std::string groupKey;
+  std::string buttonLabel;
+};
+
+ParsedShape parseShapeName(const std::string& name) {
+  static const std::string rawSuffix = "-raw";
+  std::string base = name;
+  bool isRaw = false;
+  if (base.size() > rawSuffix.size() &&
+      base.compare(base.size() - rawSuffix.size(), rawSuffix.size(),
+                   rawSuffix) == 0) {
+    isRaw = true;
+    base = base.substr(0, base.size() - rawSuffix.size());
+  }
+  size_t lparen = base.find('(');
+  if (lparen != std::string::npos && !base.empty() && base.back() == ')') {
+    std::string groupKey = base.substr(0, lparen);
+    std::string label = base.substr(lparen + 1, base.size() - lparen - 2);
+    if (isRaw) groupKey += "-raw";
+    return {std::move(groupKey), std::move(label)};
+  }
+  return {isRaw ? "vowels-raw" : "vowels", std::move(base)};
+}
+
+// Friendly heading from a group key. Vowel groups get nice labels;
+// articulator-prefixed keys get the prefix expanded ("tt-" → "Tongue
+// tip"); a trailing "-raw" becomes a "(raw)" suffix; otherwise dashes
+// become spaces and the first letter is capitalised.
+std::string formatGroupHeading(const std::string& key) {
+  if (key == "vowels") return "Vowels";
+  if (key == "vowels-raw") return "Vowels (raw)";
+
+  static const std::string rawSuffix = "-raw";
+  std::string base = key;
+  bool isRaw = false;
+  if (base.size() > rawSuffix.size() &&
+      base.compare(base.size() - rawSuffix.size(), rawSuffix.size(),
+                   rawSuffix) == 0) {
+    isRaw = true;
+    base = base.substr(0, base.size() - rawSuffix.size());
+  }
+
+  struct Prefix {
+    const char* code;
+    const char* label;
+  };
+  // Articulator codes used by the JD2 / M01 speaker files. See the
+  // upstream VocalTractLab gestural-score docs for the full list.
+  static const Prefix prefixes[] = {
+      {"ll-", "Lower lip"},
+      {"ul-", "Upper lip"},
+      {"tt-", "Tongue tip"},
+      {"tb-", "Tongue body"},
+      {"tm-", "Tongue middle"},
+      {"td-", "Tongue dorsum"},
+  };
+  std::string heading;
+  bool matched = false;
+  for (const Prefix& p : prefixes) {
+    size_t plen = std::strlen(p.code);
+    if (base.size() > plen && base.compare(0, plen, p.code) == 0) {
+      std::string rest = base.substr(plen);
+      for (char& c : rest) {
+        if (c == '-') c = ' ';
+      }
+      heading = std::string(p.label) + " · " + rest;
+      matched = true;
+      break;
+    }
+  }
+  if (!matched) {
+    heading = base;
+    for (char& c : heading) {
+      if (c == '-') c = ' ';
+    }
+    if (!heading.empty()) {
+      heading[0] = (char)std::toupper((unsigned char)heading[0]);
+    }
+  }
+  if (isRaw) heading += " (raw)";
+  return heading;
+}
+
+// Tinted-when-selected SmallButton. Stand-in for ImGui's missing
+// segmented control — same idiom used in the 3D panel's solid/wire
+// toggle.
+bool segmentedButton(const char* label, bool selected) {
+  if (selected) {
+    ImGui::PushStyleColor(ImGuiCol_Button,
+                          ImGui::GetColorU32(ImGuiCol_ButtonActive));
+  }
+  bool clicked = ImGui::SmallButton(label);
+  if (selected) ImGui::PopStyleColor();
+  return clicked;
+}
+
+}  // namespace
+
+void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
+                            const std::vector<SpeakerOption>& speakers) {
+  ImGui::Begin("Tract Shapes");
+
+  // ---- Speaker switcher ----------------------------------------------------
+  if (!speakers.empty()) {
+    ImGui::SeparatorText("Speaker");
+
+    // Track the active speaker by matching engine.currentSpeakerPath()
+    // against the option list. Falls back to "no match" when the
+    // running speaker isn't in the list (shouldn't happen with the
+    // current flow, but be defensive).
+    const std::string& current = engine.currentSpeakerPath();
+    int activeIdx = -1;
+    for (int i = 0; i < (int)speakers.size(); ++i) {
+      if (speakers[i].path == current) {
+        activeIdx = i;
+        break;
+      }
+    }
+
+    ImGui::PushID("speaker-switch");
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 0.0f));
+    for (int i = 0; i < (int)speakers.size(); ++i) {
+      if (i > 0) ImGui::SameLine();
+      if (segmentedButton(speakers[i].displayName.c_str(), i == activeIdx) &&
+          i != activeIdx) {
+        if (engine.restart(speakers[i].path)) {
+          // Refresh in place so the rest of the frame's
+          // writeFrameSnapshot doesn't clobber the new engine's
+          // defaults with stale params from the old speaker.
+          snap = readFrameSnapshot(engine);
+        }
+      }
+    }
+    ImGui::PopStyleVar();
+    ImGui::PopID();
+    ImGui::Spacing();
+  }
+
+  // ---- Tract shapes grouped by phonetic category ---------------------------
+  const auto& shapes = engine.tractShapes();
+
+  struct Item {
+    int shapeIndex;
+    std::string label;
+  };
+  std::vector<std::string> groupOrder;
+  std::map<std::string, std::vector<Item>> groups;
+  for (int i = 0; i < (int)shapes.size(); ++i) {
+    ParsedShape p = parseShapeName(shapes[i].name);
+    if (groups.find(p.groupKey) == groups.end()) {
+      groupOrder.push_back(p.groupKey);
+    }
+    groups[p.groupKey].push_back({i, std::move(p.buttonLabel)});
+  }
+
+  // Fixed button width keeps the grid neat regardless of label length
+  // — the longest natural label is "6_mid"/"6_low" at 5 chars, plus
+  // some padding. Height defaults to the standard frame height.
+  constexpr float kButtonWidth = 56.0f;
+  const ImGuiStyle& style = ImGui::GetStyle();
+  for (const std::string& key : groupOrder) {
+    ImGui::SeparatorText(formatGroupHeading(key).c_str());
+
+    // PushID(key) disambiguates duplicate button labels across groups
+    // (e.g. "a" appears under "Vowels", "tt-alveolar-fricative", and
+    // many others — they'd collide on the default-from-label ID).
+    ImGui::PushID(key.c_str());
+    const std::vector<Item>& items = groups[key];
+
+    // Manual flex-wrap: SameLine when the next fixed-width button
+    // still fits in the row, otherwise drop to a fresh row. The
+    // SeparatorText above advances the cursor to a new line, so the
+    // first button always starts at column 0.
+    const float windowEnd = ImGui::GetWindowPos().x +
+                            ImGui::GetWindowContentRegionMax().x;
+    for (size_t j = 0; j < items.size(); ++j) {
+      const Item& item = items[j];
+      if (j > 0) {
+        float lastX2 = ImGui::GetItemRectMax().x;
+        float nextX2 = lastX2 + style.ItemSpacing.x + kButtonWidth;
+        if (nextX2 < windowEnd) ImGui::SameLine();
+      }
+      if (ImGui::Button(item.label.c_str(), ImVec2(kButtonWidth, 0.0f))) {
+        for (int p = 0; p < VocalTract::NUM_PARAMS; ++p) {
+          snap.tractParams[p] = shapes[item.shapeIndex].param[p];
+        }
+      }
+    }
+    ImGui::PopID();
+    ImGui::Spacing();
+  }
+
+  ImGui::End();
+}
+
+}  // namespace live

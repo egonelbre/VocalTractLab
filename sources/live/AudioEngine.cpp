@@ -273,6 +273,7 @@ bool AudioEngine::start(const std::string& speakerFile) {
   }
 
   running.store(true);
+  speakerPath = speakerFile;
 #if !defined(__EMSCRIPTEN__)
   // Native: a dedicated audio thread paces synthesis to realtime, freeing
   // the UI from doing it. On web (Emscripten) the host can't easily spawn
@@ -280,6 +281,11 @@ bool AudioEngine::start(const std::string& speakerFile) {
   thread = std::thread(&AudioEngine::threadMain, this);
 #endif
   return true;
+}
+
+bool AudioEngine::restart(const std::string& speakerFile) {
+  stop();
+  return start(speakerFile);
 }
 
 void AudioEngine::stop() {

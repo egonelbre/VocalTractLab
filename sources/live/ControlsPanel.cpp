@@ -58,28 +58,7 @@ void renderControlsPanel(AudioEngine& engine, FrameSnapshot& snap) {
       snap.pressure_dPa = p_f;
     }
     ImGui::SliderFloat("Output gain", &snap.outputGain, 0.0f, 1.0f, "%.2f");
-
-    ImGui::Spacing();
-    ImGui::TextUnformatted("Vowel preset");
-    const auto& shapes = engine.tractShapes();
-    static int comboIndex = -1;
-    const char* preview =
-        (comboIndex >= 0 && comboIndex < (int)shapes.size())
-            ? shapes[comboIndex].name.c_str()
-            : "(custom)";
-    if (ImGui::BeginCombo("Tract shape", preview)) {
-      for (int i = 0; i < (int)shapes.size(); ++i) {
-        bool selected = (i == comboIndex);
-        if (ImGui::Selectable(shapes[i].name.c_str(), selected)) {
-          comboIndex = i;
-          for (int p = 0; p < VocalTract::NUM_PARAMS; ++p) {
-            snap.tractParams[p] = shapes[i].param[p];
-          }
-        }
-        if (selected) ImGui::SetItemDefaultFocus();
-      }
-      ImGui::EndCombo();
-    }
+    // Tract shape presets live in the dedicated "Tract Shapes" panel.
   }
 
   ImGui::Spacing();

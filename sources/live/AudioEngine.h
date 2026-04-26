@@ -71,6 +71,17 @@ class AudioEngine {
   bool start(const std::string& speakerFile);
   void stop();
 
+  // Tear the running engine down (stop()) and immediately bring it back
+  // up against a different speaker file. Lets the UI swap speakers at
+  // runtime without losing the audio device. Returns false if start()
+  // fails on the new speaker — the engine is left stopped in that case.
+  bool restart(const std::string& speakerFile);
+
+  // Path passed to the most recent successful start(); empty before
+  // first start. Used by the UI to know which speaker is currently
+  // loaded so the switcher can highlight the right segment.
+  const std::string& currentSpeakerPath() const { return speakerPath; }
+
   // Public state shared between threads.
   ControlState control;
   AudioHistory history;
@@ -103,6 +114,7 @@ class AudioEngine {
 
   std::atomic<bool> running{false};
   std::thread thread;
+  std::string speakerPath;
 
   // Models owned by the audio thread.
   Glottis* glottis = nullptr;
