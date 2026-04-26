@@ -1,0 +1,74 @@
+name: deploy-wasm
+
+# Builds the Emscripten/WASM flavor of vtl_live and publishes it to
+# GitHub Pages. The wasm CMake preset uses Emscripten's built-in ports
+# for GLFW + OpenAL and FetchContent for ImGui, so vcpkg is not needed
+# on this path and the submodule is left unfetched.
+#
+# This workflow does not consume any user-controlled github.event
+# fields in run: commands, so the standard "workflow injection" risks
+# from issue titles / PR bodies / commit messages do not apply here.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One Pages deployment at a time; queue rather than cancel so an
+# in-flight deploy is not interrupted by a follow-up push.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+          actions-cache-folder: emsdk-cache
+
+      - name: Configure (wasm preset)
+        run: cmake --preset wasm
+
+      - name: Build vtl_live
+        run: cmake --build --preset wasm
+
+      - name: Stage site
+        # Emscripten emits vtl_live.{html,js,wasm,data}. The .js/.wasm/.data
+        # references inside the HTML are by basename, so copying the HTML
+        # to index.html keeps the relative loads working without further
+        # rewriting. .nojekyll prevents Pages from running Jekyll, which
+        # would otherwise drop files starting with underscores.
+        run: |
+          mkdir -p site
+          cp build/wasm/vtl_live.html  site/index.html
+          cp build/wasm/vtl_live.js    site/
+          cp build/wasm/vtl_live.wasm  site/
+          cp build/wasm/vtl_live.data  site/
+          touch site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
