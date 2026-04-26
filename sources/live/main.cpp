@@ -71,15 +71,24 @@ void buildDefaultDockLayout(ImGuiID dockspace_id) {
   ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
   ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
   ImGuiID leftId, rightId;
-  ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.32f, &leftId,
+  ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.22f, &leftId,
                               &rightId);
   ImGuiID rightTopId, rightBottomId;
-  ImGui::DockBuilderSplitNode(rightId, ImGuiDir_Up, 0.65f, &rightTopId,
+  ImGui::DockBuilderSplitNode(rightId, ImGuiDir_Up, 0.55f, &rightTopId,
                               &rightBottomId);
+  // Slice the top-right strip into three side-by-side cells so the 2D
+  // tract, 3D tract, and vowel chart are all visible at once instead of
+  // sharing a single tabbed dock.
+  ImGuiID rtTract2dId, rtRest;
+  ImGui::DockBuilderSplitNode(rightTopId, ImGuiDir_Left, 1.0f / 3.0f,
+                              &rtTract2dId, &rtRest);
+  ImGuiID rtTract3dId, rtVowelId;
+  ImGui::DockBuilderSplitNode(rtRest, ImGuiDir_Left, 0.5f, &rtTract3dId,
+                              &rtVowelId);
   ImGui::DockBuilderDockWindow("Controls", leftId);
-  ImGui::DockBuilderDockWindow("Vowel Chart", leftId);
-  ImGui::DockBuilderDockWindow("Vocal Tract", rightTopId);
-  ImGui::DockBuilderDockWindow("Vocal Tract 3D", rightTopId);
+  ImGui::DockBuilderDockWindow("Vocal Tract", rtTract2dId);
+  ImGui::DockBuilderDockWindow("Vocal Tract 3D", rtTract3dId);
+  ImGui::DockBuilderDockWindow("Vowel Chart", rtVowelId);
   ImGui::DockBuilderDockWindow("Primary Spectrum", rightBottomId);
   ImGui::DockBuilderDockWindow("Spectrogram", rightBottomId);
   ImGui::DockBuilderDockWindow("Glottal Pulse", rightBottomId);
