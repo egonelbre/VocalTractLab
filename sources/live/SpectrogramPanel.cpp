@@ -39,6 +39,86 @@ constexpr int CELL_H = 3;
 // signals; larger = more dynamic range visible.
 constexpr double DYNAMIC_RANGE_DB = 80.0;
 
+// F0 (pitch) tracking range — covers singing/speech without spending YIN
+// cycles on bands the synthesizer never produces.
+constexpr double F0_MIN_HZ = 80.0;
+constexpr double F0_MAX_HZ = 600.0;
+constexpr int F0_TAU_MIN = (int)((double)AUDIO_SAMPLING_RATE_HZ / F0_MAX_HZ);
+constexpr int F0_TAU_MAX =
+    (int)((double)AUDIO_SAMPLING_RATE_HZ / F0_MIN_HZ) + 1;
+constexpr int F0_WINDOW_LEN = 768;  // ≈ 16 ms @ 48 kHz
+// CMNDF "voicing" threshold from de Cheveigné & Kawahara 2002. Values below
+// the threshold are treated as confidently periodic.
+constexpr double F0_THRESHOLD = 0.15;
+// Re-estimate every Nth spectrogram column. Keeps total YIN cost ≈ 10 ms
+// per panel render even on a wide panel.
+constexpr int F0_COLUMN_HOP = 4;
+
+// CMNDF-style YIN F0 detector over a single window. Returns 0.0 for
+// unvoiced (no candidate below threshold and no clear minimum) so callers
+// can break the F0-track polyline cleanly. Reuses static scratch buffers
+// to avoid per-call allocation.
+double estimateF0(const float* x) {
+  static std::vector<double> d;
+  static std::vector<double> cmndf;
+  if ((int)d.size() != F0_TAU_MAX + 1) d.assign(F0_TAU_MAX + 1, 0.0);
+  if ((int)cmndf.size() != F0_TAU_MAX + 1) cmndf.assign(F0_TAU_MAX + 1, 0.0);
+
+  // Energy gate: silence in, silence out. Spares the inner loop on quiet
+  // history (e.g. before the first audio chunk has been produced).
+  double energy = 0.0;
+  for (int j = 0; j < F0_WINDOW_LEN; ++j) energy += (double)x[j] * x[j];
+  if (energy < 1e-6) return 0.0;
+
+  // d(tau) = sum_{j=0}^{W-1} (x[j] - x[j+tau])^2
+  for (int tau = F0_TAU_MIN; tau <= F0_TAU_MAX; ++tau) {
+    double sum = 0.0;
+    for (int j = 0; j < F0_WINDOW_LEN; ++j) {
+      double diff = (double)x[j] - (double)x[j + tau];
+      sum += diff * diff;
+    }
+    d[tau] = sum;
+  }
+  // Cumulative-mean normalized difference: cmndf(tau) =
+  //     d(tau) * tau / sum_{i=1..tau} d(i)
+  double running = 0.0;
+  cmndf[0] = 1.0;
+  for (int tau = 1; tau < F0_TAU_MIN; ++tau) cmndf[tau] = 1.0;  // unused
+  for (int tau = F0_TAU_MIN; tau <= F0_TAU_MAX; ++tau) {
+    running += d[tau];
+    cmndf[tau] = (running > 1e-12) ? d[tau] * (double)tau / running : 1.0;
+  }
+
+  // First tau in [tauMin, tauMax) where cmndf dips below the threshold,
+  // then walk down to the local minimum. Skipping past higher-tau
+  // candidates is what makes YIN robust against octave errors.
+  int bestTau = -1;
+  for (int tau = F0_TAU_MIN; tau < F0_TAU_MAX; ++tau) {
+    if (cmndf[tau] < F0_THRESHOLD) {
+      while (tau + 1 <= F0_TAU_MAX && cmndf[tau + 1] < cmndf[tau]) ++tau;
+      bestTau = tau;
+      break;
+    }
+  }
+  if (bestTau < 0) return 0.0;  // unvoiced
+
+  // Parabolic interpolation around the discrete minimum for sub-sample
+  // tau resolution; without this F0 quantizes visibly to (sampleRate/tau)
+  // bins of several Hz.
+  double tauRefined = (double)bestTau;
+  if (bestTau > F0_TAU_MIN && bestTau < F0_TAU_MAX) {
+    double s0 = cmndf[bestTau - 1];
+    double s1 = cmndf[bestTau];
+    double s2 = cmndf[bestTau + 1];
+    double denom = s0 - 2.0 * s1 + s2;
+    if (std::fabs(denom) > 1e-9) {
+      tauRefined = (double)bestTau + 0.5 * (s0 - s2) / denom;
+    }
+  }
+  if (tauRefined < 1.0) return 0.0;
+  return (double)AUDIO_SAMPLING_RATE_HZ / tauRefined;
+}
+
 // Gauss window of length n with sigma chosen the same way as
 // graphing/SpectrogramPlot::getGaussWindow — narrow enough that the tails
 // die off well before the frame ends.
@@ -204,7 +284,72 @@ void drawSpectrogram(ImDrawList* dl, AudioHistory& history, double f0_Hz,
     }
   }
 
-  // Time axis: history coverage at the bottom-left corner.
+  // ----- F0 track -----------------------------------------------------------
+  // YIN per column at a coarse hop, plus a numeric readout in the corner so
+  // you can verify the synthesizer is hitting the requested fundamental.
+  // Drawn after the harmonic guides so the track sits on top.
+  const ImU32 colF0 = ImGui::GetColorU32(ImGuiCol_PlotLinesHovered);
+  std::vector<float> f0Track((size_t)numCols, 0.0f);
+  // Window placement: data range is [start, start + W + tauMax]. We center
+  // that range on the column's centerSample so the F0 estimate aligns
+  // visually with the spectrogram column.
+  const int dataSpan = F0_WINDOW_LEN + F0_TAU_MAX;
+  for (int col = 0; col < numCols; col += F0_COLUMN_HOP) {
+    int centerSample =
+        (int)((int64_t)col * (AUDIO_HISTORY_SIZE - 1) /
+              std::max(1, numCols - 1));
+    int windowStart = centerSample - dataSpan / 2;
+    if (windowStart < 0 || windowStart + dataSpan > AUDIO_HISTORY_SIZE) {
+      continue;
+    }
+    f0Track[(size_t)col] =
+        (float)estimateF0(samples.data() + windowStart);
+  }
+  // Stitch sampled columns into per-column track via linear interp; skip
+  // segments where either endpoint is unvoiced so the polyline doesn't
+  // dip to 0 Hz.
+  for (int seg = 0; seg + F0_COLUMN_HOP < numCols; seg += F0_COLUMN_HOP) {
+    float a = f0Track[(size_t)seg];
+    float b = f0Track[(size_t)std::min(seg + F0_COLUMN_HOP, numCols - 1)];
+    if (a <= 0.0f || b <= 0.0f) continue;
+    int last = std::min(seg + F0_COLUMN_HOP, numCols - 1);
+    for (int c = seg + 1; c < last; ++c) {
+      float t = (float)(c - seg) / (float)(last - seg);
+      f0Track[(size_t)c] = a + t * (b - a);
+    }
+  }
+  // Draw segments wherever consecutive columns are both voiced.
+  for (int col = 1; col < numCols; ++col) {
+    float a = f0Track[(size_t)(col - 1)];
+    float b = f0Track[(size_t)col];
+    if (a <= 0.0f || b <= 0.0f) continue;
+    if (a > VIEW_RANGE_HZ || b > VIEW_RANGE_HZ) continue;
+    float x0 = canvasMin.x + (float)((col - 1) * CELL_W);
+    float x1 = canvasMin.x + (float)(col * CELL_W);
+    dl->AddLine(ImVec2(x0, yForFreq(a)), ImVec2(x1, yForFreq(b)), colF0, 2.0f);
+  }
+  // Median of the voiced columns is robust against single-column glitches
+  // (octave halving on a transient, etc.).
+  static std::vector<float> voiced;
+  voiced.clear();
+  for (float f : f0Track) {
+    if (f > 0.0f) voiced.push_back(f);
+  }
+  if (!voiced.empty()) {
+    std::nth_element(voiced.begin(), voiced.begin() + voiced.size() / 2,
+                     voiced.end());
+    float medianF0 = voiced[voiced.size() / 2];
+    char flabel[40];
+    std::snprintf(flabel, sizeof(flabel), "F0 detected: %d Hz   target: %d Hz",
+                  (int)(medianF0 + 0.5f), (int)(f0_Hz + 0.5));
+    dl->AddText(ImVec2(canvasMin.x + 4.0f, canvasMax.y - 14.0f), colF0,
+                flabel);
+  } else {
+    dl->AddText(ImVec2(canvasMin.x + 4.0f, canvasMax.y - 14.0f), colText,
+                "F0 detected: --");
+  }
+
+  // Time axis: history coverage at the bottom-right corner.
   double durationMs =
       1000.0 * (double)AUDIO_HISTORY_SIZE / (double)AUDIO_SAMPLING_RATE_HZ;
   char tlabel[32];
