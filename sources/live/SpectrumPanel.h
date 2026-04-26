@@ -2,6 +2,7 @@
 #define LIVE_SPECTRUM_PANEL_H_
 
 class ComplexSignal;
+class VocalTract;
 
 namespace live {
 
@@ -13,10 +14,15 @@ struct AudioHistory;
 constexpr int FFT_LEN_EXPONENT = 10;
 constexpr int FFT_LEN = 1 << FFT_LEN_EXPONENT;
 
-// Renders the "Primary Spectrum" ImGui window. Reads the latest FFT_LEN
-// samples from history and reuses fft as scratch space (it must be large
-// enough; FFT_LEN is fine).
-void renderSpectrumPanel(AudioHistory& history, ComplexSignal& fft);
+// Renders the "Primary Spectrum" ImGui window. Overlays four things:
+//   1. FFT magnitude of the latest audio output (from history).
+//   2. The vocal-tract transfer function computed from uiTract via TlModel.
+//   3. A harmonic comb at n*f0_Hz so you can see which model peaks the
+//      current fundamental actually excites.
+//   4. Formant frequencies (F1..F4) extracted from the same TlModel.
+// fft is reused as scratch space and must hold at least FFT_LEN samples.
+void renderSpectrumPanel(AudioHistory& history, ComplexSignal& fft,
+                         VocalTract* uiTract, double f0_Hz);
 
 }  // namespace live
 

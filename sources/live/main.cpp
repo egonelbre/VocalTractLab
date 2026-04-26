@@ -13,7 +13,7 @@
 //   ControlsPanel        — sliders, vowel/glottis presets
 //   VocalTract2DPanel    — mediosagittal outline + drag handles
 //   VocalTract3DPanel    — software-projected wireframe
-//   SpectrumPanel        — FFT-based primary spectrum
+//   SpectrumPanel        — FFT-based primary spectrum + VTTF + formants
 //
 // AudioEngine wraps the synthesizer + OpenAL queue and runs either on a
 // background thread (native) or pumped from this main loop (Emscripten).
@@ -109,7 +109,8 @@ void frameTick() {
   live::renderControlsPanel(engine, snap);
   live::renderVocalTract2DPanel(engine.uiTract(), snap.tractParams.data());
   live::renderVocalTract3DPanel(engine.uiTract());
-  live::renderSpectrumPanel(engine.history, fftBuf);
+  live::renderSpectrumPanel(engine.history, fftBuf, engine.uiTract(),
+                           snap.f0_Hz);
   live::writeFrameSnapshot(engine, snap);
 
   ImGui::Render();

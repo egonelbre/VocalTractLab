@@ -6,6 +6,9 @@
 #include <vector>
 
 #include "AudioEngine.h"
+#include "acoustics/TlModel.h"
+#include "acoustics/Tube.h"
+#include "anatomy/VocalTract.h"
 #include "core/Constants.h"
 #include "dsp/Dsp.h"
 #include "dsp/Signal.h"
@@ -15,8 +18,16 @@ namespace live {
 
 namespace {
 
+// Length of the VTTF spectrum. 4096 bins at 48 kHz gives ~12 Hz resolution,
+// plenty to render smooth formant peaks across a 0–8 kHz axis. Matches the
+// SPECTRUM_LENGTH the wxWidgets gui uses for the same view.
+constexpr int VTTF_LEN_EXPONENT = 12;
+constexpr int VTTF_LEN = 1 << VTTF_LEN_EXPONENT;
+constexpr int MAX_FORMANTS = 4;
+
 void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
-                  ImVec2 canvasMin, ImVec2 canvasMax) {
+                  VocalTract* uiTract, double f0_Hz, ImVec2 canvasMin,
+                  ImVec2 canvasMax) {
   float canvasW = canvasMax.x - canvasMin.x;
   float canvasH = canvasMax.y - canvasMin.y;
   if (canvasW <= 1.0f || canvasH <= 1.0f) return;
@@ -26,20 +37,12 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   const ImU32 colBg = ImGui::GetColorU32(ImGuiCol_FrameBg);
   const ImU32 colGrid = ImGui::GetColorU32(ImGuiCol_Text, 0.22f);
   const ImU32 colCurve = ImGui::GetColorU32(ImGuiCol_PlotLines);
+  const ImU32 colVttf = ImGui::GetColorU32(ImGuiCol_PlotHistogram);
+  const ImU32 colHarmonic = ImGui::GetColorU32(ImGuiCol_Text, 0.30f);
+  const ImU32 colFormant = ImGui::GetColorU32(ImGuiCol_PlotHistogramHovered);
   const ImU32 colText = ImGui::GetColorU32(ImGuiCol_TextDisabled);
   const ImU32 colBorder = ImGui::GetColorU32(ImGuiCol_Border);
   dl->AddRectFilled(canvasMin, canvasMax, colBg);
-
-  static std::array<float, FFT_LEN> samples;
-  history.copyLatest(samples.data(), FFT_LEN);
-
-  fftBuf.reset(FFT_LEN);
-  for (int i = 0; i < FFT_LEN; ++i) {
-    double w = 0.5 - 0.5 * std::cos(2.0 * M_PI * i / (double)(FFT_LEN - 1));
-    fftBuf.re[i] = (double)samples[i] * w;
-    fftBuf.im[i] = 0.0;
-  }
-  complexFFT(fftBuf, FFT_LEN_EXPONENT, true);
 
   const double fMin_Hz = 0.0;
   const double fMax_Hz = 8000.0;
@@ -58,6 +61,7 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
            canvasH * (float)((db - dbMin) / (dbMax - dbMin));
   };
 
+  // Grid + axis labels.
   for (int khz = 1; khz < (int)(fMax_Hz / 1000.0); ++khz) {
     float x = xForFreq((double)khz * 1000.0);
     dl->AddLine(ImVec2(x, canvasMin.y), ImVec2(x, canvasMax.y), colGrid, 1.0f);
@@ -73,6 +77,100 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
     dl->AddText(ImVec2(canvasMin.x + 2.0f, y - 14.0f), colText, label);
   }
 
+  // ----- Vocal tract transfer function + formants ---------------------------
+  // Reuse a single TlModel across frames so its prevTube/prevOptions cache
+  // skips redundant matrix math when the tract hasn't changed.
+  static TlModel s_tlModel;
+  static ComplexSignal s_vttf(VTTF_LEN);
+  bool haveVttf = false;
+  double formantFreq[MAX_FORMANTS] = {};
+  double formantBw[MAX_FORMANTS] = {};
+  int numFormants = 0;
+  bool isClosure = false;
+
+  if (uiTract != nullptr) {
+    // Capture geometry from the UI tract (already calculateAll()'d by the
+    // 2D panel earlier in the frame). Closing the glottis sections matches
+    // the FLOW_SOURCE_TF convention used by the wxWidgets spectrum view.
+    uiTract->getTube(&s_tlModel.tube);
+    s_tlModel.tube.resetGlottisSections(0.0);
+    s_tlModel.getSpectrum(TlModel::FLOW_SOURCE_TF, &s_vttf, VTTF_LEN,
+                          Tube::FIRST_PHARYNX_SECTION);
+    haveVttf = true;
+
+    bool frictionNoise = false;
+    bool isNasal = false;
+    s_tlModel.getFormants(formantFreq, formantBw, numFormants, MAX_FORMANTS,
+                          frictionNoise, isClosure, isNasal);
+  }
+
+  // ----- Audio FFT ----------------------------------------------------------
+  static std::array<float, FFT_LEN> samples;
+  history.copyLatest(samples.data(), FFT_LEN);
+
+  fftBuf.reset(FFT_LEN);
+  for (int i = 0; i < FFT_LEN; ++i) {
+    double w = 0.5 - 0.5 * std::cos(2.0 * M_PI * i / (double)(FFT_LEN - 1));
+    fftBuf.re[i] = (double)samples[i] * w;
+    fftBuf.im[i] = 0.0;
+  }
+  complexFFT(fftBuf, FFT_LEN_EXPONENT, true);
+
+  // ----- Harmonic comb ------------------------------------------------------
+  // Tick marks along the bottom at n * f0 so you can see which model peaks
+  // the current fundamental actually excites. Only drawn when f0 is in a
+  // sensible singing/speech range.
+  if (f0_Hz > 20.0 && f0_Hz < fMax_Hz) {
+    int maxHarmonic = (int)(fMax_Hz / f0_Hz);
+    if (maxHarmonic > 200) maxHarmonic = 200;  // avoid pathological loops
+    for (int n = 1; n <= maxHarmonic; ++n) {
+      double f = (double)n * f0_Hz;
+      float x = xForFreq(f);
+      // Short tick from the bottom; the height makes it visible without
+      // drowning the curves above.
+      dl->AddLine(ImVec2(x, canvasMax.y - 1.0f),
+                  ImVec2(x, canvasMax.y - 8.0f), colHarmonic, 1.0f);
+    }
+  }
+
+  // ----- VTTF curve ---------------------------------------------------------
+  // Normalize so the in-band peak shows up at 0 dB. Without this the
+  // transfer-function magnitudes are on a different scale than the audio
+  // FFT and the curve walks off the top/bottom of the window.
+  if (haveVttf) {
+    const double vttfFreqStep = (double)AUDIO_SAMPLING_RATE_HZ / (double)VTTF_LEN;
+    int binMax = (int)(fMax_Hz / vttfFreqStep);
+    if (binMax >= VTTF_LEN / 2) binMax = VTTF_LEN / 2 - 1;
+    double peakMag = 1e-12;
+    for (int i = 1; i <= binMax; ++i) {
+      double m = s_vttf.getMagnitude(i);
+      if (m > peakMag) peakMag = m;
+    }
+    double peakDb = 20.0 * std::log10(peakMag);
+
+    std::vector<ImVec2> vttfPts;
+    vttfPts.reserve((int)canvasW + 1);
+    const double mag0 = 1e-9;
+    for (int px = 0; px <= (int)canvasW; ++px) {
+      double f = fMin_Hz + (fMax_Hz - fMin_Hz) * (double)px / (double)canvasW;
+      double bin = f / vttfFreqStep;
+      int i0 = (int)bin;
+      if (i0 < 0) i0 = 0;
+      if (i0 >= VTTF_LEN / 2 - 1) i0 = VTTF_LEN / 2 - 2;
+      double t = bin - (double)i0;
+      double m = (1.0 - t) * s_vttf.getMagnitude(i0) +
+                 t * s_vttf.getMagnitude(i0 + 1);
+      if (m < mag0) m = mag0;
+      double db = 20.0 * std::log10(m) - peakDb;  // peak -> 0 dB
+      vttfPts.push_back(ImVec2(canvasMin.x + (float)px, yForDb(db)));
+    }
+    if (vttfPts.size() >= 2) {
+      dl->AddPolyline(vttfPts.data(), (int)vttfPts.size(), colVttf,
+                      ImDrawFlags_None, 1.5f);
+    }
+  }
+
+  // ----- Audio FFT curve ----------------------------------------------------
   std::vector<ImVec2> pts;
   pts.reserve((int)canvasW + 1);
   const double mag0 = 1e-6;
@@ -93,18 +191,39 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
     dl->AddPolyline(pts.data(), (int)pts.size(), colCurve, ImDrawFlags_None,
                     1.5f);
   }
+
+  // ----- Formant markers ----------------------------------------------------
+  // Drawn last so the labels sit on top of everything else. Suppressed
+  // when getFormants reported a complete closure (the peaks aren't formants
+  // in the usual sense then).
+  if (!isClosure) {
+    for (int i = 0; i < numFormants; ++i) {
+      double f = formantFreq[i];
+      if (f < fMin_Hz || f > fMax_Hz) continue;
+      float x = xForFreq(f);
+      dl->AddLine(ImVec2(x, canvasMin.y), ImVec2(x, canvasMax.y), colFormant,
+                  1.0f);
+      char label[32];
+      std::snprintf(label, sizeof(label), "F%d %d Hz", i + 1, (int)(f + 0.5));
+      dl->AddText(ImVec2(x + 3.0f, canvasMin.y + 2.0f + (float)i * 14.0f),
+                  colFormant, label);
+    }
+  }
+
   dl->AddRect(canvasMin, canvasMax, colBorder);
 }
 
 }  // namespace
 
-void renderSpectrumPanel(AudioHistory& history, ComplexSignal& fft) {
+void renderSpectrumPanel(AudioHistory& history, ComplexSignal& fft,
+                         VocalTract* uiTract, double f0_Hz) {
   ImGui::Begin("Primary Spectrum");
   ImVec2 avail = ImGui::GetContentRegionAvail();
   ImVec2 pos = ImGui::GetCursorScreenPos();
   ImVec2 canvasMin = pos;
   ImVec2 canvasMax = ImVec2(pos.x + avail.x, pos.y + avail.y);
-  drawSpectrum(ImGui::GetWindowDrawList(), history, fft, canvasMin, canvasMax);
+  drawSpectrum(ImGui::GetWindowDrawList(), history, fft, uiTract, f0_Hz,
+               canvasMin, canvasMax);
   ImGui::Dummy(avail);
   ImGui::End();
 }
