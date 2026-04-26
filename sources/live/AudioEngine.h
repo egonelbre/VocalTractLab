@@ -90,8 +90,9 @@ class AudioEngine {
   // Synchronous pump for environments that cannot spawn a thread (web/WASM).
   // Generates audio chunks until the OpenAL queue is full or maxChunks have
   // been produced. Native builds rely on the synthesis thread instead and
-  // do not call this.
-  void pumpMainThread(int maxChunks = 8);
+  // do not call this. Default cap matches NUM_AL_BUFFERS so a single frame
+  // after a stall can refill the queue in one go.
+  void pumpMainThread(int maxChunks = 16);
 
  private:
   void threadMain();

@@ -122,9 +122,11 @@ void frameTick() {
 
 #if defined(__EMSCRIPTEN__)
   // No background audio thread on the web; keep the OpenAL queue topped up
-  // here. 8 chunks × 10 ms = 80 ms of headroom, plenty for a 60 fps main
-  // loop even when the browser stalls a frame.
-  engine.pumpMainThread(8);
+  // here. The queue itself holds NUM_AL_BUFFERS × CHUNK_SAMPLES (~160 ms)
+  // of audio — more than enough to span a 60 Hz frame and absorb the
+  // occasional browser stall. The default pump budget matches the queue
+  // depth so a single frame after a stall can fully refill it.
+  engine.pumpMainThread();
 #endif
 
   glfwPollEvents();

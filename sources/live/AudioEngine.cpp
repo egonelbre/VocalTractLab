@@ -37,10 +37,15 @@ namespace {
 
 // Synthesize 480 samples (= 10 ms @ 48 kHz) per chunk. Big enough that the
 // audio thread is not woken up too often, small enough that articulation
-// changes feel responsive. We keep four buffers in flight, so the worst-case
-// latency is ~40 ms.
+// changes feel responsive.
 constexpr int CHUNK_SAMPLES = 480;
-constexpr int NUM_AL_BUFFERS = 4;
+// 16 buffers × 480 samples / 48 kHz ≈ 160 ms of OpenAL queue headroom.
+// Sized for the WASM build where audio production runs on the same
+// thread as the UI: any browser frame stall up to ~150 ms (GC, slow
+// render, tab refocus) is absorbed without underrun. Native builds
+// have a dedicated audio thread so they never stall the queue, and
+// the extra slots cost only ~30 KB of int16 ringbuffer.
+constexpr int NUM_AL_BUFFERS = 16;
 
 // Number of glottis models the speaker file describes; matches the upstream
 // API. We construct all three so that whichever the speaker selects can be
