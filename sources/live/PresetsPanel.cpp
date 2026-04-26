@@ -4,6 +4,7 @@
 #include <cstring>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "AudioEngine.h"
@@ -113,6 +114,33 @@ std::string formatGroupHeading(const std::string& key) {
   return heading;
 }
 
+// Map a (X-)SAMPA-style vowel label to its IPA equivalent. Speaker
+// files use SAMPA-ish identifiers ("E", "U", "@", "6_low" …); the
+// rendered button text uses IPA glyphs (Noto Sans covers the IPA
+// Extensions block we need). A trailing ":" is treated as a SAMPA
+// length marker and rewritten to the IPA triangular colon "ː".
+// Unknown labels pass through unchanged so e.g. "a", "e", "i" stay
+// as-is and any speaker-defined extension we haven't seen still
+// renders something readable.
+std::string toIpa(const std::string& label) {
+  bool isLong = !label.empty() && label.back() == ':';
+  std::string base = isLong ? label.substr(0, label.size() - 1) : label;
+  static const std::unordered_map<std::string, const char*> map = {
+      {"a", "a"},      {"e", "e"},      {"i", "i"},      {"o", "o"},
+      {"u", "u"},      {"y", "y"},
+      {"I", "ɪ"},      {"E", "ɛ"},      {"O", "ɔ"},      {"U", "ʊ"},
+      {"Y", "ʏ"},      {"2", "ø"},      {"9", "œ"},      {"@", "ə"},
+      // 6 in SAMPA is the near-open central vowel ɐ. The JD2 speaker
+      // file distinguishes a mid and low variant — render with a
+      // raised / lowered diacritic so both glyphs read at a glance.
+      {"6_mid", "ɐ̝"}, {"6_low", "ɐ̞"},
+  };
+  auto it = map.find(base);
+  std::string ipa = (it != map.end()) ? std::string(it->second) : base;
+  if (isLong) ipa += "ː";
+  return ipa;
+}
+
 // Tinted-when-selected SmallButton. Stand-in for ImGui's missing
 // segmented control — same idiom used in the 3D panel's solid/wire
 // toggle.
@@ -212,11 +240,19 @@ void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
         float nextX2 = lastX2 + style.ItemSpacing.x + kButtonWidth;
         if (nextX2 < windowEnd) ImGui::SameLine();
       }
-      if (ImGui::Button(item.label.c_str(), ImVec2(kButtonWidth, 0.0f))) {
+      // Push the original SAMPA-ish label as the ID, then render the
+      // IPA glyph as the visible button text. Keeps the widget IDs
+      // stable across IPA mapping tweaks (no ImGui state churn from
+      // a relabel) and avoids any worry about IPA glyph variants
+      // colliding through ImGui's default label-derived IDs.
+      ImGui::PushID(item.label.c_str());
+      std::string ipa = toIpa(item.label);
+      if (ImGui::Button(ipa.c_str(), ImVec2(kButtonWidth, 0.0f))) {
         for (int p = 0; p < VocalTract::NUM_PARAMS; ++p) {
           snap.tractParams[p] = shapes[item.shapeIndex].param[p];
         }
       }
+      ImGui::PopID();
     }
     ImGui::PopID();
     ImGui::Spacing();
