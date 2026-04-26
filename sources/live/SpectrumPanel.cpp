@@ -33,7 +33,7 @@ constexpr int MAX_FORMANTS = 4;
 // spread out; log Hz makes the keys nearly uniform width — pitch is
 // logarithmic in frequency, so a log axis is the natural fit.
 void drawPianoKeyboard(ImDrawList* dl, ImVec2 kbdMin, ImVec2 kbdMax,
-                       double fMin_Hz, double fMax_Hz, bool logFreq) {
+                       double fMin_Hz, double fMax_Hz, FreqScale scale) {
   const float kbdW = kbdMax.x - kbdMin.x;
   const float kbdH = kbdMax.y - kbdMin.y;
   if (kbdW < 1.0f || kbdH < 1.0f) return;
@@ -49,7 +49,7 @@ void drawPianoKeyboard(ImDrawList* dl, ImVec2 kbdMin, ImVec2 kbdMax,
   const double logFmax = std::log(fMax_Hz);
   const double logRange = logFmax - logFmin;
   auto xForFreq = [&](double f) {
-    if (logFreq) {
+    if (scale == FreqScale::Log) {
       double lf = std::log(f > 1.0 ? f : 1.0);
       return kbdMin.x + kbdW * (float)((lf - logFmin) / logRange);
     }
@@ -125,7 +125,7 @@ void drawPianoKeyboard(ImDrawList* dl, ImVec2 kbdMin, ImVec2 kbdMax,
 }
 
 void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
-                  VocalTract* uiTract, double f0_Hz, bool logFreq,
+                  VocalTract* uiTract, double f0_Hz, FreqScale scale,
                   ImVec2 canvasMin, ImVec2 canvasMaxFull) {
   // Reserve a strip at the bottom for the piano keyboard. Spectrum
   // curves, axis labels, and stems all use canvasMax (shrunk) so they
@@ -156,17 +156,18 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   // below typical singing F0 (~80 Hz) and below the lowest piano A0
   // (~27.5 Hz still falls outside, but A0 is below the human voice
   // anyway and would just be an off-scale stub).
-  const double fMin_Hz = logFreq ? 50.0 : 0.0;
+  const bool isLog = (scale == FreqScale::Log);
+  const double fMin_Hz = isLog ? 50.0 : 0.0;
   const double fMax_Hz = 8000.0;
   const double dbMin = -90.0;
   const double dbMax = 0.0;
   const double freqStep_Hz = (double)AUDIO_SAMPLING_RATE_HZ / (double)FFT_LEN;
-  const double logFmin = std::log(logFreq ? fMin_Hz : 1.0);
+  const double logFmin = std::log(isLog ? fMin_Hz : 1.0);
   const double logFmax = std::log(fMax_Hz);
   const double logRange = logFmax - logFmin;
 
   auto xForFreq = [&](double f) {
-    if (logFreq) {
+    if (isLog) {
       double lf = std::log(f > 1.0 ? f : 1.0);
       return canvasMin.x + canvasW * (float)((lf - logFmin) / logRange);
     }
@@ -178,7 +179,7 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   // not just of frequency.
   auto freqForPx = [&](int px) {
     double t = (double)px / (double)canvasW;
-    if (logFreq) return std::exp(logFmin + logRange * t);
+    if (isLog) return std::exp(logFmin + logRange * t);
     return fMin_Hz + (fMax_Hz - fMin_Hz) * t;
   };
   auto yForDb = [&](double db) {
@@ -191,7 +192,7 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   // Frequency grid + axis labels. Linear mode uses kHz multiples; log
   // mode uses the standard "audio decade" set so each gridline lands at
   // a familiar frequency rather than at log(N).
-  if (logFreq) {
+  if (isLog) {
     static const double gridFreqs[] = {100, 200, 500, 1000, 2000, 5000};
     static const char* gridLabels[] = {"100", "200", "500", "1k", "2k", "5k"};
     for (int i = 0; i < (int)(sizeof(gridFreqs) / sizeof(gridFreqs[0])); ++i) {
@@ -389,30 +390,76 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   // canvas (canvasMaxFull) for its lower bound.
   if (canvasMaxFull.y > canvasMax.y + 1.0f) {
     drawPianoKeyboard(dl, ImVec2(canvasMin.x, canvasMax.y), canvasMaxFull,
-                      fMin_Hz, fMax_Hz, logFreq);
+                      fMin_Hz, fMax_Hz, scale);
     dl->AddRect(ImVec2(canvasMin.x, canvasMax.y), canvasMaxFull, colBorder);
   }
 }
 
 }  // namespace
 
+// Compact two-segment selector drawn inline. Each cell is a borderless
+// button; the active segment is filled with the active-button color so
+// the pair reads as one switch rather than two unrelated buttons.
+template <typename T>
+bool segmentedButton(const char* idScope, const char* const* labels,
+                     const T* values, int count, T& current, ImVec2 cellSize) {
+  bool changed = false;
+  ImGui::PushID(idScope);
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+  for (int i = 0; i < count; ++i) {
+    if (i > 0) ImGui::SameLine();
+    bool selected = (values[i] == current);
+    ImVec4 base = ImGui::GetStyleColorVec4(
+        selected ? ImGuiCol_ButtonActive : ImGuiCol_Button);
+    ImGui::PushStyleColor(ImGuiCol_Button, base);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+    ImGui::PushID(i);
+    if (ImGui::Button(labels[i], cellSize)) {
+      current = values[i];
+      changed = true;
+    }
+    ImGui::PopID();
+    ImGui::PopStyleColor(3);
+  }
+  ImGui::PopStyleVar(2);
+  ImGui::PopID();
+  return changed;
+}
+
 void renderSpectrumPanel(AudioHistory& history, ComplexSignal& fft,
                          VocalTract* uiTract, double f0_Hz) {
   ImGui::Begin("Primary Spectrum");
 
   // Frequency-axis mode. Static so the user's choice persists across
-  // frames. Linear by default to match the existing behavior; log gives
-  // pitch-uniform spacing that pairs naturally with the piano keyboard.
-  static bool s_logFreq = false;
-  ImGui::Checkbox("Log frequency", &s_logFreq);
+  // frames. Log by default — gives pitch-uniform spacing that pairs
+  // naturally with the piano keyboard along the bottom of the panel.
+  static FreqScale s_scale = FreqScale::Log;
 
   ImVec2 avail = ImGui::GetContentRegionAvail();
   ImVec2 pos = ImGui::GetCursorScreenPos();
   ImVec2 canvasMin = pos;
   ImVec2 canvasMax = ImVec2(pos.x + avail.x, pos.y + avail.y);
   drawSpectrum(ImGui::GetWindowDrawList(), history, fft, uiTract, f0_Hz,
-               s_logFreq, canvasMin, canvasMax);
+               s_scale, canvasMin, canvasMax);
   ImGui::Dummy(avail);
+
+  // Overlay the scale selector in the top-right of the canvas. The
+  // buttons are submitted after the spectrum draw calls so they land on
+  // top in the draw list; SetCursorScreenPos pulls the layout cursor
+  // back over the just-claimed Dummy area, and the buttons fit inside
+  // it so the panel does not auto-grow.
+  static const char* const kLabels[] = {"lin", "log"};
+  static const FreqScale kValues[] = {FreqScale::Linear, FreqScale::Log};
+  const ImVec2 cell(28.0f, 18.0f);
+  const float pad = 6.0f;
+  ImVec2 btnPos(canvasMax.x - 2.0f * cell.x - pad, canvasMin.y + pad);
+  ImGui::SetCursorScreenPos(btnPos);
+  segmentedButton("##spec_scale", kLabels, kValues, 2, s_scale, cell);
+
   ImGui::End();
 }
 

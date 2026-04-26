@@ -106,9 +106,13 @@ void frameTick() {
   ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(
       0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
   static bool dockBuilt = false;
+  static bool focusPrimary = false;
   if (!dockBuilt) {
     dockBuilt = true;
     buildDefaultDockLayout(dockspace_id);
+    // Defer the focus call to after the panels have been Begin'd this
+    // frame — SetWindowFocus only finds windows that already exist.
+    focusPrimary = true;
   }
 
   // Snapshot control state once per frame so the panels work against a
@@ -126,6 +130,13 @@ void frameTick() {
   live::renderSpectrogramPanel(engine.history, snap.f0_Hz);
   live::renderLfPulsePanel(snap.f0_Hz);
   live::writeFrameSnapshot(engine, snap);
+
+  // Make Primary Spectrum the active tab in its dock on a fresh layout.
+  // Runs after all panels' Begin so SetWindowFocus can find the window.
+  if (focusPrimary) {
+    focusPrimary = false;
+    ImGui::SetWindowFocus("Primary Spectrum");
+  }
 
   ImGui::Render();
   int displayW, displayH;

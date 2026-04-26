@@ -14,6 +14,13 @@ struct AudioHistory;
 constexpr int FFT_LEN_EXPONENT = 10;
 constexpr int FFT_LEN = 1 << FFT_LEN_EXPONENT;
 
+// Frequency-axis mode for the primary spectrum. Open enum so future scales
+// (e.g. Mel, Bark, ERB) can be added without breaking call sites.
+enum class FreqScale {
+  Linear,
+  Log,
+};
+
 // Renders the "Primary Spectrum" ImGui window. Overlays four things:
 //   1. FFT magnitude of the latest audio output (from history).
 //   2. The vocal-tract transfer function computed from uiTract via TlModel.
