@@ -55,10 +55,38 @@ ParsedShape parseShapeName(const std::string& name) {
   return {isRaw ? "vowels-raw" : "vowels", std::move(base)};
 }
 
+// Look up the closest voiceless-consonant IPA glyph for a gestural
+// shape key like "tt-alveolar-fricative". Returns nullptr when the
+// shape has no clean single-glyph equivalent (e.g. postalveolar
+// closure / lateral, where IPA only has diacritic-decorated forms).
+//
+// The shapes describe vocal-tract configurations, not full
+// phonemes — voicing is a glottis property — so the suffix is meant
+// as a "what would this gesture sound like with a voiceless source?"
+// hint rather than an exact mapping.
+const char* ipaForShape(const std::string& base) {
+  static const std::unordered_map<std::string, const char*> map = {
+      {"ll-labial-closure",        "p"},
+      {"ll-dental-fricative",      "f"},
+      {"tt-dental-fricative",      "θ"},
+      {"tt-alveolar-closure",      "t"},
+      {"tt-alveolar-fricative",    "s"},
+      {"tt-alveolar-lateral",      "l"},
+      {"tt-postalveolar-fricative","ʃ"},
+      {"tb-palatal-fricative",     "ç"},
+      {"tb-velar-closure",         "k"},
+      {"tb-uvular-fricative",      "χ"},
+  };
+  auto it = map.find(base);
+  return (it != map.end()) ? it->second : nullptr;
+}
+
 // Friendly heading from a group key. Vowel groups get nice labels;
 // articulator-prefixed keys get the prefix expanded ("tt-" → "Tongue
-// tip"); a trailing "-raw" becomes a "(raw)" suffix; otherwise dashes
-// become spaces and the first letter is capitalised.
+// tip") and a voiceless-IPA hint appended where there's a clean
+// equivalent ("[s]", "[p]", …); a trailing "-raw" becomes a "(raw)"
+// suffix; otherwise dashes become spaces and the first letter is
+// capitalised.
 std::string formatGroupHeading(const std::string& key) {
   if (key == "vowels") return "Vowels";
   if (key == "vowels-raw") return "Vowels (raw)";
@@ -109,6 +137,11 @@ std::string formatGroupHeading(const std::string& key) {
     if (!heading.empty()) {
       heading[0] = (char)std::toupper((unsigned char)heading[0]);
     }
+  }
+  if (const char* ipa = ipaForShape(base)) {
+    heading += "  [";
+    heading += ipa;
+    heading += "]";
   }
   if (isRaw) heading += " (raw)";
   return heading;
