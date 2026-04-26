@@ -161,8 +161,29 @@ jobs:
             ./third_party/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           fi
 
+      - name: Cache vcpkg source downloads
+        # vcpkg fetches each port's upstream tarball into this directory.
+        # GitHub.com occasionally returns 502 on archive fetches, and
+        # vcpkg's own retry budget (3) is not always enough. Persisting
+        # the downloads dir across runs means a transient 502 only has
+        # to happen once per port version.
+        uses: actions/cache@v4
+        with:
+          path: third_party/vcpkg/downloads
+          key: vcpkg-downloads-${{ runner.os }}-${{ hashFiles('third_party/vcpkg/versions/baseline.json') }}
+          restore-keys: |
+            vcpkg-downloads-${{ runner.os }}-
+
       - name: Configure
-        run: cmake --preset ${{ matrix.preset }}
+        # Configure triggers vcpkg's port installs, which fetch source
+        # tarballs from third-party hosts. Wrap in a retry so a transient
+        # 502 from github.com or a similar mirror does not fail the run.
+        uses: nick-fields/retry@v3
+        with:
+          max_attempts: 3
+          retry_wait_seconds: 30
+          timeout_minutes: 60
+          command: cmake --preset ${{ matrix.preset }}
 
       - name: Show vcpkg bootstrap log on failure
         if: failure()
