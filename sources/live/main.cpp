@@ -58,6 +58,11 @@ struct LabApp {
   live::AudioEngine* engine = nullptr;
   ComplexSignal* fftBuf = nullptr;
   std::vector<live::SpeakerOption> speakers;
+  // Bigger Noto Sans, re-rasterized at a larger pixel size, used by
+  // the Tract Shapes panel to render the per-shape buttons. nullptr
+  // when the font file couldn't be loaded — the panel falls back to
+  // the default UI font.
+  ImFont* tractShapeFont = nullptr;
 };
 LabApp g_app;
 
@@ -198,7 +203,8 @@ void frameTick() {
   live::renderControlsPanel(engine, snap);
   // Tract shapes / speaker switcher panel. May call AudioEngine::restart
   // and re-read snap in place when the user picks a different speaker.
-  live::renderTractShapesPanel(engine, snap, g_app.speakers);
+  live::renderTractShapesPanel(engine, snap, g_app.speakers,
+                               g_app.tractShapeFont);
   // Vowel chart runs before the 2D panel so a click/drag in F1/F2 space
   // mutates snap.tractParams before the tract is recalculated and drawn.
   live::renderVowelChartPanel(engine, snap);
@@ -302,13 +308,20 @@ int main(int argc, char** argv) {
         argc > 0 ? argv[0] : "vtl_live", "NotoSans-Regular.ttf");
 #endif
     // Basic Latin + Latin-1 (covers æ U+00E6) + Latin Extended-A/B + IPA
-    // Extensions (ɪ ɛ ɑ ɔ ʌ ɜ ʊ in VowelChartPanel).
+    // Extensions (ɪ ɛ ɑ ɔ ʌ ɜ ʊ in VowelChartPanel) + Combining
+    // Diacritical Marks (raised/lowered marks under ɐ for the
+    // 6_mid / 6_low IPA renders in the Tract Shapes panel).
     static const ImWchar ranges[] = {
-        0x0020, 0x00FF, 0x0100, 0x024F, 0x0250, 0x02AF, 0,
+        0x0020, 0x00FF, 0x0100, 0x024F, 0x0250, 0x02AF, 0x0300, 0x036F, 0,
     };
     if (!fontPath.empty()) {
       io.Fonts->AddFontFromFileTTF(fontPath.string().c_str(), 16.0f, nullptr,
                                    ranges);
+      // Larger re-rasterization of the same font for the Tract Shapes
+      // buttons. Re-rasterizing (rather than ImGui::SetWindowFontScale)
+      // keeps the IPA glyphs crisp at the bigger size.
+      g_app.tractShapeFont = io.Fonts->AddFontFromFileTTF(
+          fontPath.string().c_str(), 22.0f, nullptr, ranges);
     }
     if (io.Fonts->Fonts.empty()) {
       // Font missing on disk — keep the default so the app still launches.

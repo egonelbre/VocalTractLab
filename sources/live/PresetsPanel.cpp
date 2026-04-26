@@ -190,7 +190,8 @@ bool segmentedButton(const char* label, bool selected) {
 }  // namespace
 
 void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
-                            const std::vector<SpeakerOption>& speakers) {
+                            const std::vector<SpeakerOption>& speakers,
+                            ImFont* buttonFont) {
   ImGui::Begin("Tract Shapes");
 
   // ---- Speaker switcher ----------------------------------------------------
@@ -246,10 +247,10 @@ void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
     groups[p.groupKey].push_back({i, std::move(p.buttonLabel)});
   }
 
-  // Fixed button width keeps the grid neat regardless of label length
-  // — the longest natural label is "6_mid"/"6_low" at 5 chars, plus
-  // some padding. Height defaults to the standard frame height.
-  constexpr float kButtonWidth = 56.0f;
+  // Fixed button width keeps the grid neat regardless of label length.
+  // Height defaults to the standard frame height (auto-grows when
+  // buttonFont is taller than the default).
+  constexpr float kButtonWidth = 64.0f;
   const ImGuiStyle& style = ImGui::GetStyle();
   for (const std::string& key : groupOrder) {
     ImGui::SeparatorText(formatGroupHeading(key).c_str());
@@ -279,8 +280,11 @@ void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
       // a relabel) and avoids any worry about IPA glyph variants
       // colliding through ImGui's default label-derived IDs.
       ImGui::PushID(item.label.c_str());
+      if (buttonFont) ImGui::PushFont(buttonFont);
       std::string ipa = toIpa(item.label);
-      if (ImGui::Button(ipa.c_str(), ImVec2(kButtonWidth, 0.0f))) {
+      bool clicked = ImGui::Button(ipa.c_str(), ImVec2(kButtonWidth, 0.0f));
+      if (buttonFont) ImGui::PopFont();
+      if (clicked) {
         for (int p = 0; p < VocalTract::NUM_PARAMS; ++p) {
           snap.tractParams[p] = shapes[item.shapeIndex].param[p];
         }

@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+struct ImFont;
+
 namespace live {
 
 class AudioEngine;
@@ -29,8 +31,14 @@ struct SpeakerOption {
 //
 // Switching speakers calls AudioEngine::restart and refreshes the
 // frame snapshot from the new engine state in place.
+//
+// `buttonFont` is an optional ImGui font to push only around the
+// shape buttons — typically a re-rasterized variant of the UI font
+// at a larger pixel size so the IPA labels read crisply. Pass null
+// to render at the default font.
 void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
-                            const std::vector<SpeakerOption>& speakers);
+                            const std::vector<SpeakerOption>& speakers,
+                            ImFont* buttonFont = nullptr);
 
 }  // namespace live
 
