@@ -26,7 +26,9 @@ enum class FreqScale {
 //   2. The vocal-tract transfer function computed from uiTract via TlModel.
 //   3. A harmonic comb at n*f0_Hz so you can see which model peaks the
 //      current fundamental actually excites.
-//   4. Formant frequencies (F1..F4) extracted from the same TlModel.
+//   4. Formant frequencies (F1..F8) extracted from the same TlModel.
+// (An antiresonance overlay exists in the implementation but is gated
+// off until the depth heuristic stops flickering on non-nasal vowels.)
 // fft is reused as scratch space and must hold at least FFT_LEN samples.
 void renderSpectrumPanel(AudioHistory& history, ComplexSignal& fft,
                          VocalTract* uiTract, double f0_Hz);

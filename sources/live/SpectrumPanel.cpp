@@ -23,7 +23,18 @@ namespace {
 // SPECTRUM_LENGTH the wxWidgets gui uses for the same view.
 constexpr int VTTF_LEN_EXPONENT = 12;
 constexpr int VTTF_LEN = 1 << VTTF_LEN_EXPONENT;
-constexpr int MAX_FORMANTS = 4;
+// TlModel::getFormants caps detection at 7 kHz; eight peaks is the
+// most we ever expect in that band for human speakers.
+constexpr int MAX_FORMANTS = 8;
+// VTTF transmission zeros are sparse outside nasal coupling, so a
+// small cap keeps the overlay readable even on a wide-open velum.
+constexpr int MAX_ANTIRES = 4;
+// Master switch for the antiresonance overlay. Off for now — the
+// 6 dB depth threshold turns out to be twitchy on non-nasal vowels
+// (one bin of ripple is enough to register), so the lines flicker
+// in/out as the tract moves. Keep the detector code wired up so we
+// can flip this back on once the heuristic is tightened.
+constexpr bool kShowAntiResonances = false;
 
 // Piano keyboard strip rendered along the bottom of the panel as a
 // frequency reference. Drawn below the spectrum plotting area; key
@@ -148,6 +159,10 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   const ImU32 colFundamental = ImGui::GetColorU32(ImGuiCol_CheckMark);
   const ImU32 colHarmonic = ImGui::GetColorU32(ImGuiCol_CheckMark, 0.55f);
   const ImU32 colFormant = ImGui::GetColorU32(ImGuiCol_PlotHistogramHovered);
+  // Distinct hue from colFormant (orange/yellow) so antiresonance lines
+  // read as a different feature class at a glance. Fixed RGB rather than
+  // a theme color so it stays cool-blue under both Light and Dark.
+  const ImU32 colAntiRes = IM_COL32(140, 200, 255, 230);
   const ImU32 colText = ImGui::GetColorU32(ImGuiCol_TextDisabled);
   const ImU32 colBorder = ImGui::GetColorU32(ImGuiCol_Border);
   dl->AddRectFilled(canvasMin, canvasMax, colBg);
@@ -334,12 +349,12 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
     }
 
     // Label the fundamental. Positioned below the formant labels (which
-    // start at canvasMin.y + 2 and stack vertically at 14 px each — F1..F4
-    // occupy y offsets 0..3*14) so the two label clusters don't collide.
+    // start at canvasMin.y + 2 and stack vertically at 14 px each — F1..F8
+    // occupy y offsets 0..7*14) so the two label clusters don't collide.
     float xf0 = xForFreq(f0_Hz);
     char flabel[40];
     std::snprintf(flabel, sizeof(flabel), "f0 = %d Hz", (int)(f0_Hz + 0.5));
-    dl->AddText(ImVec2(xf0 + 4.0f, canvasMin.y + 2.0f + 4.0f * 14.0f),
+    dl->AddText(ImVec2(xf0 + 4.0f, canvasMin.y + 2.0f + 8.0f * 14.0f),
                 colFundamental, flabel);
   }
 
@@ -365,10 +380,54 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
                     1.5f);
   }
 
-  // ----- Formant markers ----------------------------------------------------
+  // ----- Antiresonance detection -------------------------------------------
+  // Scan the VTTF for local minima — transmission zeros, audible as
+  // notches in the radiated spectrum (most prominently with nasal
+  // coupling). Mirrors the formant pass but inverts the comparison and
+  // requires the notch sit at least 6 dB below the surrounding peaks
+  // to filter out shallow ripple.
+  double antiFreq[MAX_ANTIRES] = {};
+  int numAntires = 0;
+  if (kShowAntiResonances && haveVttf && !isClosure) {
+    const int firstBin = std::max(1, (int)(150.0 / vttfFreqStep));
+    int lastBin = (int)(7000.0 / vttfFreqStep);
+    if (lastBin >= VTTF_LEN / 2 - 1) lastBin = VTTF_LEN / 2 - 2;
+    // ~12 Hz per bin × 20 ≈ 240 Hz: wide enough to span the shoulder
+    // of a normal-bandwidth resonance flanking the notch.
+    const int kWindow = 20;
+    const double kDepthRatio = 1.995;  // 10^(6/20) ≈ +6 dB
+    // Refuse two notches inside ~150 Hz of each other so a single
+    // broad valley doesn't get reported twice from neighboring bins.
+    const int kMinSeparation = std::max(1, (int)(150.0 / vttfFreqStep));
+    int lastAcceptedBin = -kMinSeparation;
+    for (int i = firstBin + 1; i < lastBin && numAntires < MAX_ANTIRES; ++i) {
+      double a0 = s_vttf.getMagnitude(i - 1);
+      double a1 = s_vttf.getMagnitude(i);
+      double a2 = s_vttf.getMagnitude(i + 1);
+      if (!(a1 < a0 && a1 < a2)) continue;
+      if (i - lastAcceptedBin < kMinSeparation) continue;
+      int kStart = std::max(firstBin, i - kWindow);
+      int kEnd = std::min(lastBin, i + kWindow);
+      double localMax = 0.0;
+      for (int k = kStart; k <= kEnd; ++k) {
+        double m = s_vttf.getMagnitude(k);
+        if (m > localMax) localMax = m;
+      }
+      if (localMax < a1 * kDepthRatio) continue;
+      // Parabolic interpolation for sub-bin frequency (same form as
+      // the formant pass; den is negative at a minimum, that's fine).
+      double den = 2.0 * a1 - a0 - a2;
+      double offset = (std::abs(den) > 1e-30) ? 0.5 * (a2 - a0) / den : 0.0;
+      antiFreq[numAntires++] = vttfFreqStep * ((double)i + offset);
+      lastAcceptedBin = i;
+    }
+  }
+
+  // ----- Formant + antiresonance markers -----------------------------------
   // Drawn last so the labels sit on top of everything else. Suppressed
-  // when getFormants reported a complete closure (the peaks aren't formants
-  // in the usual sense then).
+  // when getFormants reported a complete closure (the peaks aren't
+  // formants in the usual sense then, and the VTTF notches likewise
+  // become meaningless).
   if (!isClosure) {
     for (int i = 0; i < numFormants; ++i) {
       double f = formantFreq[i];
@@ -380,6 +439,20 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
       std::snprintf(label, sizeof(label), "F%d %d Hz", i + 1, (int)(f + 0.5));
       dl->AddText(ImVec2(x + 3.0f, canvasMin.y + 2.0f + (float)i * 14.0f),
                   colFormant, label);
+    }
+    // Antiresonance labels stack from the bottom upward (above the
+    // grid frequency labels at canvasMax.y - 14), keeping them spatially
+    // distinct from the F1..F8 column at the top.
+    for (int i = 0; i < numAntires; ++i) {
+      double f = antiFreq[i];
+      if (f < fMin_Hz || f > fMax_Hz) continue;
+      float x = xForFreq(f);
+      dl->AddLine(ImVec2(x, canvasMin.y), ImVec2(x, canvasMax.y), colAntiRes,
+                  1.0f);
+      char label[32];
+      std::snprintf(label, sizeof(label), "A%d %d Hz", i + 1, (int)(f + 0.5));
+      dl->AddText(ImVec2(x + 3.0f, canvasMax.y - 28.0f - (float)i * 14.0f),
+                  colAntiRes, label);
     }
   }
 
