@@ -13,6 +13,7 @@
 //   ControlsPanel        — sliders, vowel/glottis presets
 //   VocalTract2DPanel    — mediosagittal outline + drag handles
 //   VocalTract3DPanel    — software-projected wireframe
+//   VowelChartPanel      — F1/F2 vowel chart, click/drag to morph tract
 //   SpectrumPanel        — FFT-based primary spectrum + VTTF + formants
 //   SpectrogramPanel     — STFT time-frequency view of recent audio
 //   LfPulsePanel         — reference LF glottal pulse + derivative
@@ -32,6 +33,7 @@
 #include "SpectrumPanel.h"
 #include "VocalTract2DPanel.h"
 #include "VocalTract3DPanel.h"
+#include "VowelChartPanel.h"
 #include "dsp/Signal.h"
 
 #include "imgui.h"
@@ -75,6 +77,7 @@ void buildDefaultDockLayout(ImGuiID dockspace_id) {
   ImGui::DockBuilderSplitNode(rightId, ImGuiDir_Up, 0.65f, &rightTopId,
                               &rightBottomId);
   ImGui::DockBuilderDockWindow("Controls", leftId);
+  ImGui::DockBuilderDockWindow("Vowel Chart", leftId);
   ImGui::DockBuilderDockWindow("Vocal Tract", rightTopId);
   ImGui::DockBuilderDockWindow("Vocal Tract 3D", rightTopId);
   ImGui::DockBuilderDockWindow("Primary Spectrum", rightBottomId);
@@ -113,6 +116,9 @@ void frameTick() {
   // before the 3D panel reads from it, so they always agree.
   live::FrameSnapshot snap = live::readFrameSnapshot(engine);
   live::renderControlsPanel(engine, snap);
+  // Vowel chart runs before the 2D panel so a click/drag in F1/F2 space
+  // mutates snap.tractParams before the tract is recalculated and drawn.
+  live::renderVowelChartPanel(engine, snap);
   live::renderVocalTract2DPanel(engine.uiTract(), snap.tractParams.data());
   live::renderVocalTract3DPanel(engine.uiTract());
   live::renderSpectrumPanel(engine.history, fftBuf, engine.uiTract(),

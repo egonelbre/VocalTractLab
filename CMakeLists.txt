@@ -338,6 +338,7 @@ if(VTL_BUILD_LIVE)
     sources/live/TractView.cpp
     sources/live/VocalTract2DPanel.cpp
     sources/live/VocalTract3DPanel.cpp
+    sources/live/VowelChartPanel.cpp
   )
 
   if(EMSCRIPTEN)
