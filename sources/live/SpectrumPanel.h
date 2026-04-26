@@ -30,8 +30,11 @@ enum class FreqScale {
 // (An antiresonance overlay exists in the implementation but is gated
 // off until the depth heuristic stops flickering on non-nasal vowels.)
 // fft is reused as scratch space and must hold at least FFT_LEN samples.
+// f0_Hz is taken by reference so a click/drag on the piano keyboard
+// strip at the bottom of the panel can snap the fundamental to the
+// nearest MIDI note in place.
 void renderSpectrumPanel(AudioHistory& history, ComplexSignal& fft,
-                         VocalTract* uiTract, double f0_Hz);
+                         VocalTract* uiTract, double& f0_Hz);
 
 }  // namespace live
 

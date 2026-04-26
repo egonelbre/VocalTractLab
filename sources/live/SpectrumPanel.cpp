@@ -36,6 +36,17 @@ constexpr int MAX_ANTIRES = 4;
 // can flip this back on once the heuristic is tightened.
 constexpr bool kShowAntiResonances = false;
 
+// Pixel height of the piano keyboard strip rendered along the
+// bottom of the spectrum canvas. Shared between drawSpectrum (which
+// reserves the space) and renderSpectrumPanel (which hit-tests
+// clicks against it).
+constexpr float kKeyboardHeight = 32.0f;
+// Spectrum frequency window endpoints. Duplicated in drawSpectrum
+// (with a scale-dependent fMin), kept here so click-to-pitch can
+// invert the same x→f mapping the visual layout uses.
+constexpr double kSpectrumFmaxHz = 8000.0;
+constexpr double kSpectrumLogFminHz = 50.0;
+
 // Piano keyboard strip rendered along the bottom of the panel as a
 // frequency reference. Drawn below the spectrum plotting area; key
 // positions use the same xForFreq mapping the curves use, so notes
@@ -141,10 +152,9 @@ void drawSpectrum(ImDrawList* dl, AudioHistory& history, ComplexSignal& fftBuf,
   // Reserve a strip at the bottom for the piano keyboard. Spectrum
   // curves, axis labels, and stems all use canvasMax (shrunk) so they
   // never overlap the keyboard band.
-  const float kbdHeight = 32.0f;
   ImVec2 canvasMax = canvasMaxFull;
-  if (canvasMaxFull.y - canvasMin.y > kbdHeight + 40.0f) {
-    canvasMax.y = canvasMaxFull.y - kbdHeight;
+  if (canvasMaxFull.y - canvasMin.y > kKeyboardHeight + 40.0f) {
+    canvasMax.y = canvasMaxFull.y - kKeyboardHeight;
   }
   float canvasW = canvasMax.x - canvasMin.x;
   float canvasH = canvasMax.y - canvasMin.y;
@@ -504,7 +514,7 @@ bool segmentedButton(const char* idScope, const char* const* labels,
 }
 
 void renderSpectrumPanel(AudioHistory& history, ComplexSignal& fft,
-                         VocalTract* uiTract, double f0_Hz) {
+                         VocalTract* uiTract, double& f0_Hz) {
   ImGui::Begin("Primary Spectrum");
 
   // Frequency-axis mode. Static so the user's choice persists across
@@ -518,12 +528,48 @@ void renderSpectrumPanel(AudioHistory& history, ComplexSignal& fft,
   ImVec2 canvasMax = ImVec2(pos.x + avail.x, pos.y + avail.y);
   drawSpectrum(ImGui::GetWindowDrawList(), history, fft, uiTract, f0_Hz,
                s_scale, canvasMin, canvasMax);
-  ImGui::Dummy(avail);
+  // InvisibleButton (instead of Dummy) so the keyboard strip below
+  // can pick up clicks. SetNextItemAllowOverlap lets the lin/log
+  // segmented buttons submitted afterwards still receive input.
+  ImGui::SetNextItemAllowOverlap();
+  ImGui::InvisibleButton("##spec_canvas", avail);
+
+  // ---- Keyboard click → snap f0 to the nearest MIDI note -----------------
+  // Only fires while the InvisibleButton is held (IsItemActive), so a
+  // press-and-drag glides f0 across keys while the cursor stays in the
+  // strip. Outside the strip the fundamental is left alone, even mid-drag.
+  const bool kbdVisible = (avail.y > kKeyboardHeight + 40.0f);
+  if (kbdVisible && ImGui::IsItemActive()) {
+    const float kbdTop = canvasMax.y - kKeyboardHeight;
+    const ImVec2 mp = ImGui::GetIO().MousePos;
+    if (mp.y >= kbdTop && mp.y <= canvasMax.y && avail.x > 1.0f) {
+      double t = (double)(mp.x - canvasMin.x) / (double)avail.x;
+      if (t < 0.0) t = 0.0;
+      if (t > 1.0) t = 1.0;
+      double f;
+      if (s_scale == FreqScale::Log) {
+        const double logFmin = std::log(kSpectrumLogFminHz);
+        const double logFmax = std::log(kSpectrumFmaxHz);
+        f = std::exp(logFmin + (logFmax - logFmin) * t);
+      } else {
+        // Linear mode starts at 0 Hz; clamp the resolved frequency to a
+        // floor before the log2 below blows up at the very left edge.
+        f = kSpectrumFmaxHz * t;
+        if (f < 20.0) f = 20.0;
+      }
+      // MIDI 69 = A4 = 440 Hz. Round to the nearest semitone, clamp into
+      // the same [C0, B8] range the keyboard renderer uses.
+      int midi = (int)std::lround(69.0 + 12.0 * std::log2(f / 440.0));
+      if (midi < 12) midi = 12;
+      if (midi > 119) midi = 119;
+      f0_Hz = 440.0 * std::pow(2.0, (midi - 69) / 12.0);
+    }
+  }
 
   // Overlay the scale selector in the top-right of the canvas. The
   // buttons are submitted after the spectrum draw calls so they land on
   // top in the draw list; SetCursorScreenPos pulls the layout cursor
-  // back over the just-claimed Dummy area, and the buttons fit inside
+  // back over the just-claimed canvas area, and the buttons fit inside
   // it so the panel does not auto-grow.
   static const char* const kLabels[] = {"lin", "log"};
   static const FreqScale kValues[] = {FreqScale::Linear, FreqScale::Log};
