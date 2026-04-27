@@ -35,6 +35,35 @@
       reloads the page; subsequent loads boot already isolated.
     -->
     <script type="text/javascript" src="coi-serviceworker.js"></script>
+    <!--
+      Pointer Lock API polyfill. Safari/iPadOS doesn't implement
+      document.exitPointerLock or Element.requestPointerLock, but
+      emscripten's quit handler calls exitPointerLock unconditionally
+      on shutdown — without these shims, closing or reloading the tab
+      throws a TypeError on iPad and the cleanup chain bails out.
+      ImGui doesn't actually use pointer lock here, so empty no-ops
+      are sufficient.
+    -->
+    <script type="text/javascript">
+      (function () {
+        if (typeof document === "undefined") return;
+        if (typeof document.exitPointerLock !== "function") {
+          document.exitPointerLock = function () {};
+        }
+        // requestPointerLock lives on Element in the spec; some engines
+        // only expose it on HTMLElement. Patch both prototypes if missing
+        // so emscripten's canvas.requestPointerLock() call doesn't
+        // explode either.
+        var protos = [];
+        if (typeof Element !== "undefined") protos.push(Element.prototype);
+        if (typeof HTMLElement !== "undefined") protos.push(HTMLElement.prototype);
+        protos.forEach(function (proto) {
+          if (typeof proto.requestPointerLock !== "function") {
+            proto.requestPointerLock = function () {};
+          }
+        });
+      })();
+    </script>
     <script type="text/javascript">
       var Module = {
         print: function() {
