@@ -4344,8 +4344,10 @@ double VocalTract::tongueSideParamToMinArea_cm2(double paramValue)
 // ****************************************************************************
 /// Returns the cross-sectional area scaling factor for a medial-compression
 /// parameter value in [0 ... 1]. 0 leaves the area unchanged (factor 1.0);
-/// 1 reduces the area to 30% of its base value at the centre of the
-/// affected region. The full Hann window over the region tapers the
+/// 1 reduces the area to 50% of its base value at the centre of the
+/// affected region. The 50% upper bound matches the high end of the
+/// MRI-measured range (Yanagi et al. 2024 reported 11.8%–52.4% AES area
+/// reduction in twang). The full Hann window over the region tapers the
 /// applied factor back to 1.0 at the region boundaries.
 // ****************************************************************************
 
@@ -4353,7 +4355,7 @@ double VocalTract::medialCompressionParamToFactor(double paramValue)
 {
   if (paramValue < 0.0) { paramValue = 0.0; }
   if (paramValue > 1.0) { paramValue = 1.0; }
-  const double MIN_FACTOR = 0.30;
+  const double MIN_FACTOR = 0.50;
   return 1.0 - (1.0 - MIN_FACTOR) * paramValue;
 }
 
@@ -5695,7 +5697,7 @@ void VocalTract::calcCrossSections()
     // Visual effect: deform the geometric structures that twang
     // actually moves, so the 2D and 3D views show a credible
     // narrowing rather than a generic tongue lift.
-    const double FULL_REDUCTION = 1.0 - 0.30;  // matches MIN_FACTOR.
+    const double FULL_REDUCTION = 1.0 - 0.50;  // matches MIN_FACTOR.
     int   ribClIndex;
     double ribClT;
 
@@ -7657,11 +7659,28 @@ void VocalTract::getTube(Tube *tube)
   TubeSection *ts = NULL;
   int i;
 
+  // The piriform sinuses sit just lateral to the AES. The same
+  // mediolateral squeeze that narrows the AES also compresses the
+  // fossae, reducing their effective volume. Acoustically this
+  // attenuates the side-branch anti-resonance around 3 kHz —
+  // exactly the band where the F3–F5 cluster of the singer's-
+  // formant cluster sits — so weakening the zero lets the cluster
+  // come through cleaner, which is one of the audible signatures
+  // of twang. The length is left unchanged: the anti-resonance
+  // frequency is set by length, and we want it to remain in the
+  // F3–F5 region rather than shifting elsewhere.
+  double mcp = params[MCP].x;
+  if (mcp < 0.0) mcp = 0.0;
+  if (mcp > 1.0) mcp = 1.0;
+  const double MAX_PIRIFORM_VOLUME_REDUCTION = 0.5;
+  double pfVolume_cm3 = anatomy.piriformFossaVolume_cm3 *
+                        (1.0 - MAX_PIRIFORM_VOLUME_REDUCTION * mcp);
+
   tube->initStaticSections(
     anatomy.subglottalCavityLength_cm,
     anatomy.nasalCavityLength_cm,
     anatomy.piriformFossaLength_cm,
-    anatomy.piriformFossaVolume_cm3);
+    pfVolume_cm3);
 
   for (i=0; i < Tube::NUM_PHARYNX_MOUTH_SECTIONS; i++)
   {
