@@ -164,6 +164,7 @@ public:
     TCX, TCY, TTX, TTY,
     TBX, TBY, TRX, TRY,
     TS1, TS2, TS3,
+    MCP, MCO,
     NUM_PARAMS
   };
 
@@ -420,6 +421,7 @@ public:
   void calcTongue();
   double tongueSideParamToElevation_cm(double paramValue);
   double tongueSideParamToMinArea_cm2(double paramValue);
+  static double medialCompressionParamToFactor(double paramValue);
   void restrictTongueParams();
   Point2D limitEllipsePos(Point2D C, double rx, double ry, LineStrip2D &border, Point2D A);
   void calcTongueRibs();

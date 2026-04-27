@@ -125,6 +125,55 @@ void drawTongueSideInset(ImDrawList* dl, const TongueSideInset& L,
               "front");
 }
 
+// Centerline-based overlay highlighting the two narrowing zones used by
+// the twang implementation. Regions match VocalTract::calcCrossSections
+// exactly so the on-screen markers line up with the acoustics:
+//   AES (warm amber): epilaryngeal tube, ~0.5 to 3.0 cm above the glottis.
+//   Oropharynx (cyan): from the AES boundary up to the velopharyngeal port.
+// The oral cavity is intentionally not shaded — twang widens the mouth, it
+// doesn't compress it.
+void drawMedialCompressionOverlay(ImDrawList* dl, VocalTract* tract,
+                                  const TractView& view) {
+  double mcp = tract->params[VocalTract::MCP].x;
+  double mco = tract->params[VocalTract::MCO].x;
+  if (mcp <= 0.0 && mco <= 0.0) return;
+
+  const double END_MARGIN_CM = 0.5;
+  const double AES_END_CM = 3.0;
+  double nasalPos = tract->nasalPortPos_cm;
+  double aesStart = END_MARGIN_CM;
+  double aesEnd = AES_END_CM;
+  double oroStart = AES_END_CM;
+  double oroEnd = nasalPos - END_MARGIN_CM;
+
+  int N = VocalTract::NUM_CENTERLINE_POINTS;
+  for (int i = 0; i < N; ++i) {
+    double pos = tract->centerLine[i].pos;
+    Point2D P = tract->centerLine[i].point;
+
+    double aes = 0.0;
+    if (mcp > 0.0 && pos > aesStart && pos < aesEnd) {
+      double t = (pos - aesStart) / (aesEnd - aesStart);
+      aes = mcp * (0.5 - 0.5 * std::cos(t * 2.0 * M_PI));
+    }
+    double oro = 0.0;
+    if (mco > 0.0 && pos > oroStart && pos < oroEnd) {
+      double t = (pos - oroStart) / (oroEnd - oroStart);
+      oro = mco * (0.5 - 0.5 * std::cos(t * 2.0 * M_PI));
+    }
+
+    double weight = aes > oro ? aes : oro;
+    if (weight < 0.02) continue;
+    int alpha = (int)(weight * 200.0);
+    if (alpha > 200) alpha = 200;
+    ImU32 col = (aes >= oro)
+                    ? IM_COL32(255, 150, 60, alpha)
+                    : IM_COL32(80, 200, 220, alpha);
+    ImVec2 sp = view.toScreen(P.x, P.y);
+    dl->AddCircleFilled(sp, 3.0f + 2.0f * (float)weight, col);
+  }
+}
+
 void appendVertex(std::vector<ImVec2>& out, const TractView& view, double x,
                   double y) {
   out.push_back(view.toScreen(x, y));
@@ -375,6 +424,7 @@ void renderVocalTract2DPanel(VocalTract* tract, double* tractParams,
   const TractBounds& bounds = articulationExtentBounds(tract);
   TractView view = computeTractView(canvasMin, canvasMax, bounds);
   drawOutline(dl, tract, view);
+  drawMedialCompressionOverlay(dl, tract, view);
 
   // InvisibleButton owns the drag interaction over the canvas.
   ImGui::SetCursorScreenPos(canvasMin);

@@ -63,6 +63,8 @@
       <param index="16"  name="TS1"  min="0.000"  max="1.000"  neutral="0.000"  positive_velocity_factor="1.000"  negative_velocity_factor="1.000" />
       <param index="17"  name="TS2"  min="0.000"  max="1.000"  neutral="0.000"  positive_velocity_factor="1.000"  negative_velocity_factor="1.000" />
       <param index="18"  name="TS3"  min="-1.000"  max="1.000"  neutral="0.000"  positive_velocity_factor="1.000"  negative_velocity_factor="1.000" />
+      <param index="19"  name="MCP"  min="0.000"  max="1.000"  neutral="0.000"  positive_velocity_factor="1.000"  negative_velocity_factor="1.000" />
+      <param index="20"  name="MCO"  min="0.000"  max="1.000"  neutral="0.000"  positive_velocity_factor="1.000"  negative_velocity_factor="1.000" />
     </anatomy>
     <shapes>
       <shape name="a">

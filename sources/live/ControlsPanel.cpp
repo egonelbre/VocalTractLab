@@ -143,6 +143,10 @@ void renderControlsPanel(AudioEngine& engine, FrameSnapshot& snap) {
     tractSlider(VocalTract::TS2, "2");
     tractSlider(VocalTract::TS3, "3");
 
+    ImGui::SeparatorText("Twang / medial compression");
+    tractSlider(VocalTract::MCP, "AES (epilarynx)");
+    tractSlider(VocalTract::MCO, "Oropharynx");
+
     ImGui::PopItemWidth();
   }
 

@@ -170,7 +170,9 @@ void VocalTract::init()
     "  <param index=\"15\" name=\"TRY\"  min=\"-6.0\"  max=\"0.0\"   neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"  
     "  <param index=\"16\" name=\"TS1\"  min=\"0.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"  
     "  <param index=\"17\" name=\"TS2\"  min=\"0.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n" 
-    "  <param index=\"18\" name=\"TS3\"  min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n" 
+    "  <param index=\"18\" name=\"TS3\"  min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
+    "  <param index=\"19\" name=\"MCP\"  min=\"0.0\"  max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
+    "  <param index=\"20\" name=\"MCO\"  min=\"0.0\"  max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "</anatomy>";
 
   // ****************************************************************
@@ -218,6 +220,8 @@ void VocalTract::init()
   params[TS1].name = "Tongue side elevation 1";
   params[TS2].name = "Tongue side elevation 2";
   params[TS3].name = "Tongue side elevation 3";
+  params[MCP].name = "AES / epilaryngeal narrowing (twang)";
+  params[MCO].name = "Oropharyngeal narrowing";
 
 
   // ****************************************************************
@@ -4338,6 +4342,23 @@ double VocalTract::tongueSideParamToMinArea_cm2(double paramValue)
 
 
 // ****************************************************************************
+/// Returns the cross-sectional area scaling factor for a medial-compression
+/// parameter value in [0 ... 1]. 0 leaves the area unchanged (factor 1.0);
+/// 1 reduces the area to 30% of its base value at the centre of the
+/// affected region. The full Hann window over the region tapers the
+/// applied factor back to 1.0 at the region boundaries.
+// ****************************************************************************
+
+double VocalTract::medialCompressionParamToFactor(double paramValue)
+{
+  if (paramValue < 0.0) { paramValue = 0.0; }
+  if (paramValue > 1.0) { paramValue = 1.0; }
+  const double MIN_FACTOR = 0.30;
+  return 1.0 - (1.0 - MIN_FACTOR) * paramValue;
+}
+
+
+// ****************************************************************************
 /// Constraints the tongue parameters so that the tongue does not stick out
 /// to much beyond the vocal tract hull.
 // ****************************************************************************
@@ -5603,7 +5624,230 @@ void VocalTract::calcCrossSections()
   }
 
   // ****************************************************************
-  // Make sure that the minimal areas in different regions are not 
+  // Apply medial compression ("twang") — based on Estill / MRI work
+  // on twang voice quality. Two independent stages of supraglottal
+  // narrowing along the centerline:
+  //
+  //   MCP — aryepiglottic-sphincter (AES) / epilaryngeal-tube
+  //         narrowing, the defining gesture of twang. Acts on the
+  //         first ~3 cm above the glottis (Sundberg-style epilarynx
+  //         tube). Reported MRI area reductions are 11.8%–52.4%
+  //         (Yanagi et al.); we map the parameter to a 70%
+  //         max area reduction at the centre of the window.
+  //   MCO — oropharyngeal narrowing, the secondary "megaphone"
+  //         component of twang. Acts between the AES and the
+  //         velopharyngeal port. The oral cavity itself widens in
+  //         twang, so MCO does NOT touch the mouth.
+  //
+  // A Hann window over each region tapers the effect to zero at
+  // the glottis, the AES/oropharynx boundary, and the velar port,
+  // so adjacent stages don't fight each other.
+  // ****************************************************************
+
+  double mcpFactor = medialCompressionParamToFactor(params[MCP].x);
+  double mcoFactor = medialCompressionParamToFactor(params[MCO].x);
+
+  if ((mcpFactor < 1.0) || (mcoFactor < 1.0))
+  {
+    // ~3 cm epilarynx length matches Sundberg's measurement of the
+    // narrowed epilaryngeal tube length contributing to the singer's
+    // formant cluster.
+    const double END_MARGIN_CM = 0.5;
+    const double AES_END_CM = 3.0;
+    double aesStart_cm  = END_MARGIN_CM;
+    double aesEnd_cm    = AES_END_CM;
+    double oroStart_cm  = AES_END_CM;
+    double oroEnd_cm    = nasalPortPos_cm - END_MARGIN_CM;
+
+    bool aesValid = aesEnd_cm > aesStart_cm + EPSILON;
+    bool oroValid = oroEnd_cm > oroStart_cm + EPSILON;
+
+    auto regionFactor = [&](double pos) {
+      double factor = 1.0;
+      if (aesValid && (mcpFactor < 1.0) &&
+          (pos > aesStart_cm) && (pos < aesEnd_cm))
+      {
+        double t = (pos - aesStart_cm) / (aesEnd_cm - aesStart_cm);
+        double window = 0.5 - 0.5 * cos(t * 2.0 * M_PI);
+        factor *= 1.0 - (1.0 - mcpFactor) * window;
+      }
+      if (oroValid && (mcoFactor < 1.0) &&
+          (pos > oroStart_cm) && (pos < oroEnd_cm))
+      {
+        double t = (pos - oroStart_cm) / (oroEnd_cm - oroStart_cm);
+        double window = 0.5 - 0.5 * cos(t * 2.0 * M_PI);
+        factor *= 1.0 - (1.0 - mcoFactor) * window;
+      }
+      return factor;
+    };
+
+    // Acoustic effect: scale cross-section area + circumference.
+    for (i = 0; i < NUM_CENTERLINE_POINTS; i++)
+    {
+      double factor = regionFactor(crossSection[i].pos);
+      if (factor < 1.0)
+      {
+        crossSection[i].area *= factor;
+        crossSection[i].circ *= sqrt(factor);
+      }
+    }
+
+    // Visual effect: deform the geometric structures that twang
+    // actually moves, so the 2D and 3D views show a credible
+    // narrowing rather than a generic tongue lift.
+    const double FULL_REDUCTION = 1.0 - 0.30;  // matches MIN_FACTOR.
+    int   ribClIndex;
+    double ribClT;
+
+    // (1) AES — the aryepiglottic folds and epiglottic base move
+    // posteriorly. We slide the EPIGLOTTIS surface in the -x
+    // direction (toward the back wall) by an amount derived from
+    // the AES factor at the surface's anchor point.
+    if (mcpFactor < 1.0)
+    {
+      Surface* eg = &surfaces[EPIGLOTTIS];
+      Point2D anchor = eg->getVertex(0, eg->numRibPoints / 2).toPoint2D();
+      double pos = getCenterLinePos(anchor, ribClIndex, ribClT);
+      double factor = 1.0;
+      if (aesValid && (pos > aesStart_cm) && (pos < aesEnd_cm))
+      {
+        double t = (pos - aesStart_cm) / (aesEnd_cm - aesStart_cm);
+        double window = 0.5 - 0.5 * cos(t * 2.0 * M_PI);
+        factor = 1.0 - (1.0 - mcpFactor) * window;
+      }
+      else if (pos <= aesStart_cm)
+      {
+        // Anchor sits below the AES window — apply the centre-of-window
+        // strength so the user still sees the AES respond to MCP.
+        factor = mcpFactor;
+      }
+      if (factor < 1.0)
+      {
+        const double MAX_AES_SHIFT_CM = 0.5;
+        double delta = MAX_AES_SHIFT_CM * (1.0 - factor) / FULL_REDUCTION;
+        for (int ri = 0; ri < eg->numRibs; ri++)
+        {
+          for (int k = 0; k < eg->numRibPoints; k++)
+          {
+            Point3D v = eg->getVertex(ri, k);
+            eg->setVertex(ri, k, v.x - delta, v.y, v.z);
+          }
+        }
+        // Re-mirror the deformation onto the two-side variant so the
+        // 3D mesh reflects it (the primary→two-side copy step in
+        // calcSurfaces has already run by this point).
+        Surface* egTw = &surfaces[EPIGLOTTIS_TWOSIDE];
+        for (int ri = 0; ri < egTw->numRibs; ri++)
+        {
+          for (int k = 0; k < eg->numRibPoints; k++)
+          {
+            Point3D P = eg->getVertex(ri, k);
+            egTw->setVertex(ri, k, P);
+            P.z = -P.z;
+            egTw->setVertex(ri, egTw->numRibPoints - 1 - k, P);
+          }
+        }
+      }
+    }
+
+    // (2) Oropharynx — the tongue root moves posteriorly toward the
+    // back pharyngeal wall. The dynamic tongue ribs in sector 0
+    // (the back-of-tongue arc) have a normal pointing in -x; pushing
+    // the rib's vertices along that normal narrows the oropharynx
+    // without lifting the tongue body toward the palate (which is a
+    // vowel articulation, not a twang gesture).
+    if (mcoFactor < 1.0)
+    {
+      const double MAX_TONGUE_BACK_SHIFT_CM = 0.6;
+      Surface* tongueSurf = &surfaces[TONGUE];
+      for (int r = 1; r < NUM_DYNAMIC_TONGUE_RIBS; r++)
+      {
+        double pos = getCenterLinePos(tongueRib[r].point, ribClIndex, ribClT);
+        double factor = 1.0;
+        if (oroValid && (pos > oroStart_cm) && (pos < oroEnd_cm))
+        {
+          double t = (pos - oroStart_cm) / (oroEnd_cm - oroStart_cm);
+          double window = 0.5 - 0.5 * cos(t * 2.0 * M_PI);
+          factor = 1.0 - (1.0 - mcoFactor) * window;
+        }
+        if (factor < 1.0)
+        {
+          double delta = MAX_TONGUE_BACK_SHIFT_CM * (1.0 - factor) / FULL_REDUCTION;
+          Point2D n = tongueRib[r].normal;
+          for (int k = 0; k < tongueSurf->numRibPoints; k++)
+          {
+            Point3D v = tongueSurf->getVertex(r, k);
+            tongueSurf->setVertex(r, k, v.x + n.x * delta,
+                                         v.y + n.y * delta, v.z);
+          }
+        }
+      }
+    }
+
+    // (3) Mediolateral component — Yanagi et al. (2024) and
+    // Honda et al. (2023) report twang uses combined AP + ML
+    // narrowing. ML pulls the side walls of the larynx and
+    // pharynx toward the midline. We implement this by scaling
+    // the z (lateral) coordinate of vertices on the cover and
+    // epiglottis surfaces in the AES / oropharynx regions, then
+    // re-mirror onto the _TWOSIDE meshes used by 3D rendering.
+    // The scale factor maps a parameter strength of 0..1 onto a
+    // 0..50% lateral pull-in at the centre of each region's
+    // Hann window, tapering to 1.0 at the boundaries.
+    {
+      const double MAX_ML_SHRINK = 0.50;
+
+      auto applyMLNarrowing = [&](Surface* primary, Surface* twoSide,
+                                  int ribStart, int ribEnd) {
+        if (primary == nullptr) return;
+        if (ribEnd >= primary->numRibs) ribEnd = primary->numRibs - 1;
+        for (int ri = ribStart; ri <= ribEnd; ri++)
+        {
+          Point2D anchor =
+              primary->getVertex(ri, primary->numRibPoints - 1).toPoint2D();
+          double pos =
+              getCenterLinePos(anchor, ribClIndex, ribClT);
+          double factor = regionFactor(pos);
+          if (factor >= 1.0) continue;
+          double strength = (1.0 - factor) / FULL_REDUCTION;
+          if (strength > 1.0) strength = 1.0;
+          double mlScale = 1.0 - MAX_ML_SHRINK * strength;
+          for (int k = 0; k < primary->numRibPoints; k++)
+          {
+            Point3D v = primary->getVertex(ri, k);
+            primary->setVertex(ri, k, v.x, v.y, v.z * mlScale);
+          }
+          if (twoSide != nullptr)
+          {
+            for (int k = 0; k < primary->numRibPoints; k++)
+            {
+              Point3D P = primary->getVertex(ri, k);
+              twoSide->setVertex(ri, k, P);
+              P.z = -P.z;
+              twoSide->setVertex(ri, twoSide->numRibPoints - 1 - k, P);
+            }
+          }
+        }
+      };
+
+      // Larynx + pharynx ribs of the upper cover (back wall) cover
+      // both the AES and oropharynx vertically.
+      applyMLNarrowing(&surfaces[UPPER_COVER], &surfaces[UPPER_COVER_TWOSIDE],
+                       0, NUM_LARYNX_RIBS + NUM_PHARYNX_RIBS - 1);
+      // Larynx + throat ribs of the lower cover (front wall + lower
+      // pharyngeal wall).
+      applyMLNarrowing(&surfaces[LOWER_COVER], &surfaces[LOWER_COVER_TWOSIDE],
+                       0, NUM_LARYNX_RIBS + NUM_THROAT_RIBS - 1);
+      // Epiglottis sits inside the AES and is already shifted
+      // posteriorly above; pinching its z makes it look like a true
+      // sphincter constriction in 3D.
+      applyMLNarrowing(&surfaces[EPIGLOTTIS], &surfaces[EPIGLOTTIS_TWOSIDE],
+                       0, NUM_EPIGLOTTIS_RIBS - 1);
+    }
+  }
+
+  // ****************************************************************
+  // Make sure that the minimal areas in different regions are not
   // undershot.
   // ****************************************************************
 
