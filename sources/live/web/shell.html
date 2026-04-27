@@ -26,6 +26,15 @@
   </head>
   <body>
     <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+    <!--
+      Cross-origin isolation shim. The wasm build links with
+      -sAUDIO_WORKLET=1 -sWASM_WORKERS=1, both of which need
+      SharedArrayBuffer. Static hosts like GitHub Pages can't set the
+      COOP/COEP headers that gate SAB, so a service worker injects
+      them on every response. On first load the worker registers and
+      reloads the page; subsequent loads boot already isolated.
+    -->
+    <script type="text/javascript" src="coi-serviceworker.js"></script>
     <script type="text/javascript">
       var Module = {
         print: function() {

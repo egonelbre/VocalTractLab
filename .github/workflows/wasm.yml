@@ -51,13 +51,17 @@ jobs:
         # references inside the HTML are by basename, so renaming the HTML
         # to index.html keeps the relative loads working. .nojekyll
         # disables Jekyll, which would otherwise drop files that start
-        # with an underscore.
+        # with an underscore. coi-serviceworker.js is the cross-origin
+        # isolation shim referenced from the HTML; without it, GitHub
+        # Pages can't grant the COOP/COEP headers that AUDIO_WORKLET +
+        # WASM_WORKERS need for SharedArrayBuffer.
         run: |
           mkdir -p site
           cp build/wasm/vtl_live.html  site/index.html
           cp build/wasm/vtl_live.js    site/
           cp build/wasm/vtl_live.wasm  site/
           cp build/wasm/vtl_live.data  site/
+          cp sources/live/web/coi-serviceworker.js site/
           touch site/.nojekyll
 
       - name: Upload Pages artifact

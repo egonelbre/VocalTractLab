@@ -535,6 +535,21 @@ if(VTL_BUILD_LIVE)
     set_property(TARGET vtl_live APPEND PROPERTY LINK_DEPENDS "${VTL_LIVE_SHELL}")
     # Emit an .html shell so the build artifact can be opened directly.
     set_target_properties(vtl_live PROPERTIES SUFFIX ".html")
+    # Cross-origin isolation service worker. The shell <script> tag
+    # references it by basename, so it has to land next to the .html
+    # in the build directory for `make serve` (and any static host) to
+    # find it. The Pages workflow copies it into the deploy artifact
+    # too. Using CMAKE_CURRENT_BINARY_DIR rather than a TARGET_FILE_DIR
+    # generator expression — the latter trips a "No target" error on
+    # this layout for reasons that don't matter here, and the build
+    # dir is exactly where vtl_live.html lands anyway.
+    set(VTL_LIVE_COI_SW
+        "${CMAKE_CURRENT_SOURCE_DIR}/sources/live/web/coi-serviceworker.js")
+    add_custom_command(TARGET vtl_live POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              "${VTL_LIVE_COI_SW}"
+              "${CMAKE_CURRENT_BINARY_DIR}/coi-serviceworker.js"
+      VERBATIM)
   else()
     # ---- Native build (macOS/Linux) ---------------------------------------
     find_package(glfw3 CONFIG REQUIRED)
