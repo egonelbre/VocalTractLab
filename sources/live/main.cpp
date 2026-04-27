@@ -379,6 +379,16 @@ int main(int argc, char** argv) {
   }
 
   ImGui_ImplGlfw_InitForOpenGL(window, true);
+#if defined(__EMSCRIPTEN__)
+  // The embedded GLFW3 emulation that ships with -sUSE_GLFW=3 quantises
+  // wheel events too aggressively, so small deltas — exactly the ones a
+  // listbox or scrollable child window needs — never reach ImGui. The
+  // ImGui backend ships a workaround that registers a raw emscripten
+  // wheel callback on the canvas and feeds the unquantised delta into
+  // io.AddMouseWheelEvent (see ImGui issue #6096). Has to be called
+  // after InitForOpenGL.
+  ImGui_ImplGlfw_InstallEmscriptenCallbacks(window, "#canvas");
+#endif
   ImGui_ImplOpenGL3_Init(glslVersion);
 
   static live::AudioEngine engine;
