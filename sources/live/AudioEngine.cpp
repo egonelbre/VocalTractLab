@@ -249,6 +249,22 @@ bool AudioEngine::start(const std::string& speakerFile) {
       uiVocalTract->params[i].x = control.tractParams[i];
     }
     uiVocalTract->calculateAll();
+
+    // Speakers ship with <root automatic_calc="..."/> which makes
+    // calcTongueGeometry derive TRX/TRY from the tongue body position
+    // (TCX/TCY) every chunk, ignoring the slider values. Honour the
+    // speaker's default for the initial state and let the user override
+    // via the Articulation panel checkbox. Either way, bake the
+    // currently active TRX/TRY (whatever calculateAll just produced —
+    // which is auto-derived if the flag was on, the shape's stored
+    // values if it was off) into the control snapshot so toggling the
+    // checkbox off later starts the sliders at a sensible position.
+    control.tractParams[VocalTract::TRX] =
+        uiVocalTract->params[VocalTract::TRX].x;
+    control.tractParams[VocalTract::TRY] =
+        uiVocalTract->params[VocalTract::TRY].x;
+    control.autoTongueRoot = uiVocalTract->anatomy.automaticTongueRootCalc;
+    vocalTract->anatomy.automaticTongueRootCalc = control.autoTongueRoot;
   }
 
   // Prime the synthesizer with one zero-length chunk: Synthesizer::addChunk
@@ -372,6 +388,12 @@ void AudioEngine::refillSynthRing() {
   ControlSnapshot snap = control.snapshot();
   snap.glottisParams[Glottis::FREQUENCY] = snap.f0_Hz;
   snap.glottisParams[Glottis::PRESSURE] = snap.pressure_dPa;
+
+  // Mirror the snapshot's auto-tongue-root toggle onto the audio thread's
+  // tract copy before addChunk runs calculateAll. Single-byte write so a
+  // torn read is not possible; worst case is one chunk that uses the
+  // previous setting.
+  vocalTract->anatomy.automaticTongueRootCalc = snap.autoTongueRoot;
 
   // renderScratch was sized in start() so addChunk's internal resize
   // stays within capacity and never reallocates from the realtime path.

@@ -23,6 +23,7 @@ FrameSnapshot readFrameSnapshot(AudioEngine& engine) {
   snap.f0_Hz = s.f0_Hz;
   snap.pressure_dPa = s.pressure_dPa;
   snap.outputGain = s.outputGain;
+  snap.autoTongueRoot = s.autoTongueRoot;
   for (int i = 0; i < VocalTract::NUM_PARAMS; ++i) {
     snap.tractParams[i] = s.tractParams[i];
   }
@@ -37,6 +38,7 @@ void writeFrameSnapshot(AudioEngine& engine, const FrameSnapshot& snap) {
   engine.control.f0_Hz = snap.f0_Hz;
   engine.control.pressure_dPa = snap.pressure_dPa;
   engine.control.outputGain = snap.outputGain;
+  engine.control.autoTongueRoot = snap.autoTongueRoot;
   for (int i = 0; i < VocalTract::NUM_PARAMS; ++i) {
     engine.control.tractParams[i] = snap.tractParams[i];
   }
@@ -118,8 +120,23 @@ void renderControlsPanel(AudioEngine& engine, FrameSnapshot& snap) {
     tractSlider(VocalTract::TBY, "Y");
 
     ImGui::SeparatorText("Tongue root");
-    tractSlider(VocalTract::TRX, "X");
-    tractSlider(VocalTract::TRY, "Y");
+    {
+      bool prev = snap.autoTongueRoot;
+      ImGui::Checkbox("Auto (from tongue body)##trauto", &snap.autoTongueRoot);
+      if (prev && !snap.autoTongueRoot) {
+        // Just turned auto OFF — seed the slider value from whatever the
+        // synth was computing automatically, so editing starts at the
+        // current visible position instead of the stale slider value.
+        snap.tractParams[VocalTract::TRX] =
+            engine.uiTract()->params[VocalTract::TRX].x;
+        snap.tractParams[VocalTract::TRY] =
+            engine.uiTract()->params[VocalTract::TRY].x;
+      }
+      ImGui::BeginDisabled(snap.autoTongueRoot);
+      tractSlider(VocalTract::TRX, "X");
+      tractSlider(VocalTract::TRY, "Y");
+      ImGui::EndDisabled();
+    }
 
     ImGui::SeparatorText("Tongue side elevation");
     tractSlider(VocalTract::TS1, "1");

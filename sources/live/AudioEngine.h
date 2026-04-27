@@ -51,6 +51,11 @@ struct ControlSnapshot {
   double glottisParams[Glottis::MAX_CONTROL_PARAMS];
   int glottisParamCount;
   float outputGain;
+  // When true, the synthesizer recomputes TRX/TRY from the tongue body
+  // position on every chunk and ignores the slider values; matches the
+  // speaker file's <root automatic_calc="1"/> behaviour. Mirrored onto
+  // VocalTract::anatomy.automaticTongueRootCalc by the audio thread.
+  bool autoTongueRoot;
 };
 
 // Mutable state shared between the UI thread (writer) and the audio thread
@@ -80,6 +85,10 @@ struct ControlState {
   // Output gain (0..1) applied at the audio output. The audio thread keeps
   // producing samples even when this is 0 so the spectrum view stays live.
   float outputGain = 0.6f;
+  // Mirrors VocalTract::anatomy.automaticTongueRootCalc. Off by default
+  // for the live app so the Tongue root sliders take effect; UI can flip
+  // it back on via the Articulation panel checkbox.
+  bool autoTongueRoot = false;
 
   // RAII writer guard. Construct once per logical update; the destructor
   // closes the seqlock window so the audio thread can observe a consistent
@@ -115,6 +124,7 @@ struct ControlState {
       snap.f0_Hz = f0_Hz;
       snap.pressure_dPa = pressure_dPa;
       snap.outputGain = outputGain;
+      snap.autoTongueRoot = autoTongueRoot;
       snap.glottisParamCount = glottisParamCount;
       std::memcpy(snap.tractParams, tractParams, sizeof(tractParams));
       std::memcpy(snap.glottisParams, glottisParams, sizeof(glottisParams));

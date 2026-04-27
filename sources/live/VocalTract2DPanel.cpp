@@ -237,9 +237,14 @@ void drawOutline(ImDrawList* dl, VocalTract* tract, const TractView& view) {
 
 }  // namespace
 
-void renderVocalTract2DPanel(VocalTract* tract, double* tractParams) {
+void renderVocalTract2DPanel(VocalTract* tract, double* tractParams,
+                             bool autoTongueRoot) {
   ImGui::Begin("Vocal Tract");
 
+  // Mirror the UI's auto-toggle onto the tract before calculateAll so the
+  // displayed geometry (and the handle positions further down) reflect
+  // whatever the synth will actually use.
+  tract->anatomy.automaticTongueRootCalc = autoTongueRoot;
   for (int i = 0; i < VocalTract::NUM_PARAMS; ++i) {
     tract->params[i].x = tractParams[i];
   }
@@ -268,6 +273,11 @@ void renderVocalTract2DPanel(VocalTract* tract, double* tractParams) {
   bool itemHovered = ImGui::IsItemHovered();
 
   static int draggingPoint = -1;
+  // Hide the tongue back handle when the synth is computing TRX/TRY for us
+  // — dragging it can't change anything, so showing it is misleading.
+  auto pointVisible = [&](int kind) {
+    return !(autoTongueRoot && kind == CP_TONGUE_BACK);
+  };
   int hoverPoint = -1;
   ImVec2 mousePx = ImGui::GetIO().MousePos;
   const float pickRadius_px = 9.0f;
@@ -275,6 +285,7 @@ void renderVocalTract2DPanel(VocalTract* tract, double* tractParams) {
   bool dragging = (draggingPoint >= 0);
   for (int i = 0; i < CP_COUNT; ++i) {
     pts[i] = getControlPoint(tract, i);
+    if (!pointVisible(i)) continue;
     ImVec2 sp = view.toScreen(pts[i].modelPos.x, pts[i].modelPos.y);
     float dx = sp.x - mousePx.x, dy = sp.y - mousePx.y;
     if (itemHovered && !dragging &&
@@ -302,6 +313,7 @@ void renderVocalTract2DPanel(VocalTract* tract, double* tractParams) {
   const ImU32 dotOutline = ImGui::GetColorU32(ImGuiCol_Text);
   const ImU32 dotIdle = ImGui::GetColorU32(ImGuiCol_FrameBg);
   for (int i = 0; i < CP_COUNT; ++i) {
+    if (!pointVisible(i)) continue;
     ImVec2 sp = view.toScreen(pts[i].modelPos.x, pts[i].modelPos.y);
     bool active = (draggingPoint == i);
     bool hover = (hoverPoint == i);

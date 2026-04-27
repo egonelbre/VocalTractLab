@@ -225,7 +225,8 @@ void frameTick() {
   // Vowel chart runs before the 2D panel so a click/drag in F1/F2 space
   // mutates snap.tractParams before the tract is recalculated and drawn.
   live::renderVowelChartPanel(engine, snap);
-  live::renderVocalTract2DPanel(engine.uiTract(), snap.tractParams.data());
+  live::renderVocalTract2DPanel(engine.uiTract(), snap.tractParams.data(),
+                                snap.autoTongueRoot);
   live::renderVocalTract3DPanel(engine.uiTract());
   live::renderSpectrumPanel(engine.history, fftBuf, engine.uiTract(),
                            snap.f0_Hz);

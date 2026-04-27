@@ -18,6 +18,10 @@ struct FrameSnapshot {
   float outputGain = 0.6f;
   std::vector<double> tractParams;     // length VocalTract::NUM_PARAMS
   std::vector<double> glottisParams;   // length engine.numGlottisParams()
+  // When true, the synthesizer derives TRX/TRY from the tongue body
+  // position (matches the speaker's <root automatic_calc/> default) and
+  // the Tongue root sliders / 2D handle are inert.
+  bool autoTongueRoot = false;
 };
 
 FrameSnapshot readFrameSnapshot(AudioEngine& engine);
