@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <mutex>
 
 #include "AudioEngine.h"
 #include "anatomy/VocalTract.h"
@@ -15,21 +14,26 @@ FrameSnapshot readFrameSnapshot(AudioEngine& engine) {
   FrameSnapshot snap;
   snap.tractParams.resize(VocalTract::NUM_PARAMS);
   snap.glottisParams.resize(engine.numGlottisParams());
-  std::lock_guard<std::mutex> lk(engine.control.mtx);
-  snap.f0_Hz = engine.control.f0_Hz;
-  snap.pressure_dPa = engine.control.pressure_dPa;
-  snap.outputGain = engine.control.outputGain;
+  // The audio thread is the only other reader, and it uses
+  // ControlState::snapshot(). Going through the same seqlock here keeps
+  // the UI's per-frame snapshot consistent with what the audio thread
+  // sees — important because writeFrameSnapshot is the only path that
+  // pushes UI edits back to the synth.
+  ControlSnapshot s = engine.control.snapshot();
+  snap.f0_Hz = s.f0_Hz;
+  snap.pressure_dPa = s.pressure_dPa;
+  snap.outputGain = s.outputGain;
   for (int i = 0; i < VocalTract::NUM_PARAMS; ++i) {
-    snap.tractParams[i] = engine.control.tractParams[i];
+    snap.tractParams[i] = s.tractParams[i];
   }
   for (int i = 0; i < (int)snap.glottisParams.size(); ++i) {
-    snap.glottisParams[i] = engine.control.glottisParams[i];
+    snap.glottisParams[i] = s.glottisParams[i];
   }
   return snap;
 }
 
 void writeFrameSnapshot(AudioEngine& engine, const FrameSnapshot& snap) {
-  std::lock_guard<std::mutex> lk(engine.control.mtx);
+  ControlState::Writer w(engine.control);
   engine.control.f0_Hz = snap.f0_Hz;
   engine.control.pressure_dPa = snap.pressure_dPa;
   engine.control.outputGain = snap.outputGain;

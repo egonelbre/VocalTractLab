@@ -312,9 +312,16 @@ if(WIN32)
   )
   target_link_libraries(VocalTractLabApiObj PUBLIC winmm)
 elseif(EMSCRIPTEN)
-  # Emscripten's OpenAL port is a single linker flag away.
+  # Emscripten's OpenAL port is a single linker flag away. Used by
+  # io/SoundLib.cpp; the live build streams audio through the AudioWorklet
+  # path instead and does not call into OpenAL itself.
   target_compile_definitions(VocalTractLabApiObj PUBLIC HAVE_OPENAL)
   target_link_options(VocalTractLabApiObj PUBLIC "SHELL:-lopenal")
+  # The vtl_live target enables -sAUDIO_WORKLET / -sWASM_WORKERS at link
+  # time, which switches the wasm-ld in --shared-memory mode. Every object
+  # file in the link must be built with the 'atomics' + 'bulk-memory'
+  # features for that to be allowed; -pthread enables them at compile time.
+  target_compile_options(VocalTractLabApiObj PUBLIC -pthread)
 else()
   target_compile_definitions(VocalTractLabApiObj PUBLIC HAVE_OPENAL)
   target_link_libraries(VocalTractLabApiObj PUBLIC OpenAL::OpenAL)
@@ -431,6 +438,9 @@ if(VTL_BUILD_LIVE)
     # Emscripten ports flags only matter at link time; passing -sUSE_GLFW=3
     # at compile time just warns. The header (GLFW/glfw3.h) is on the
     # include path unconditionally.
+    # Same atomics-feature requirement as VocalTractLabApiObj — see the
+    # note on AUDIO_WORKLET there.
+    target_compile_options(imgui_static PUBLIC -pthread)
 
     add_executable(vtl_live ${LIVE_SOURCES} $<TARGET_OBJECTS:VocalTractLabApiObj>)
     target_include_directories(vtl_live PRIVATE
@@ -443,7 +453,65 @@ if(VTL_BUILD_LIVE)
       imgui_static
     )
     set(VTL_LIVE_SHELL "${CMAKE_CURRENT_SOURCE_DIR}/sources/live/web/shell.html")
+    # AudioWorklet runs the synthesizer on its own browser-managed audio
+    # thread so a slow UI frame can't starve the speakers. -sAUDIO_WORKLET
+    # implies -sWASM_WORKERS, which uses SharedArrayBuffer + Wasm atomics:
+    # the page must be served with cross-origin isolation
+    # (Cross-Origin-Opener-Policy: same-origin and
+    # Cross-Origin-Embedder-Policy: require-corp). emrun adds these
+    # automatically; static hosting needs to set them in the server config.
+    #
+    # -pthread is needed at compile time so each TU is built with the
+    # 'atomics' + 'bulk-memory' Wasm features that --shared-memory
+    # requires at link time, and so the thread-aware libc++ variant
+    # (which WASM_WORKERS pulls in transitively) finds its pthread
+    # synchronisation symbols. We do not actually spawn any pthreads —
+    # std::thread is #if-guarded out on the WASM build — so no thread
+    # pool is reserved at startup.
+    # -pthread enables 'atomics' + 'bulk-memory' Wasm features at compile
+    # time (each TU must opt in for --shared-memory at link to be allowed).
+    # AUDIO_WORKLET / WASM_WORKERS themselves are link-only.
+    target_compile_options(vtl_live PRIVATE -pthread)
+    # Browser stack traces from a release build show only raw wasm offsets
+    # (e.g. "vtl_live.wasm:0x111a9"), which is useless for diagnosing the
+    # AudioWorklet path. -g2 keeps function names + file/line info in the
+    # wasm without pulling in full DWARF, so worklet stack traces become
+    # readable without measurably touching runtime cost. The flag adds
+    # ~150 KB to vtl_live.wasm — keep it on by default until we ship.
+    option(VTL_LIVE_WASM_DEBUG
+           "Build the wasm live target with function names in stack traces" ON)
+    if(VTL_LIVE_WASM_DEBUG)
+      target_compile_options(vtl_live PRIVATE -g2)
+      target_link_options(vtl_live PRIVATE -g2)
+      # Names from VocalTractLabApiObj/imgui need the same compile-side
+      # debug flag to survive into the link, otherwise frames in the synth
+      # / ImGui code show up as raw wasm offsets again.
+      target_compile_options(VocalTractLabApiObj PUBLIC -g2)
+      target_compile_options(imgui_static PUBLIC -g2)
+    endif()
+    # ASSERTIONS + STACK_OVERFLOW_CHECK add per-call runtime checks that
+    # turn into measurable overhead on the AudioWorklet thread, especially
+    # under DevTools instrumentation — Chrome will silently drop the
+    # processor after a few missed-deadline quanta. Off by default; flip
+    # them on when chasing crashes (and close DevTools while listening).
+    option(VTL_LIVE_WASM_ASSERTIONS
+           "Add ASSERTIONS + STACK_OVERFLOW_CHECK runtime checks" OFF)
+    if(VTL_LIVE_WASM_ASSERTIONS)
+      target_link_options(vtl_live PRIVATE
+        "SHELL:-sASSERTIONS=1"
+        "SHELL:-sSTACK_OVERFLOW_CHECK=2"
+      )
+    endif()
+    # SAFE_HEAP traps every out-of-bounds heap access at the actual access
+    # site (slow — easily 3-4× CPU). Off by default; flip it on when
+    # chasing memory corruption that ASSERTIONS doesn't pinpoint.
+    option(VTL_LIVE_WASM_SAFE_HEAP
+           "Add SAFE_HEAP runtime bounds checks to the wasm live target" OFF)
+    if(VTL_LIVE_WASM_SAFE_HEAP)
+      target_link_options(vtl_live PRIVATE "SHELL:-sSAFE_HEAP=1")
+    endif()
     target_link_options(vtl_live PRIVATE
+      -pthread
       "SHELL:-sUSE_GLFW=3"
       "SHELL:-sUSE_WEBGL2=1"
       "SHELL:-sFULL_ES3=1"
@@ -453,7 +521,9 @@ if(VTL_BUILD_LIVE)
       "SHELL:-sINITIAL_MEMORY=128MB"
       "SHELL:-sSTACK_SIZE=2MB"
       "SHELL:-sEXIT_RUNTIME=0"
-      "SHELL:-lopenal"
+      "SHELL:-sAUDIO_WORKLET=1"
+      "SHELL:-sWASM_WORKERS=1"
+      "SHELL:-sPTHREAD_POOL_SIZE=0"
       "SHELL:-lidbfs.js"
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/JD2.speaker@/JD2.speaker"
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/M01.speaker@/M01.speaker"

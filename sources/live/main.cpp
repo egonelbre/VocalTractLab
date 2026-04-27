@@ -103,16 +103,24 @@ void glfwErrorCallback(int code, const char* msg) {
 }
 
 #if defined(__EMSCRIPTEN__)
-// Resize the canvas to match the current browser viewport, in device pixels,
-// and tell GLFW about the new size so ImGui's IO.DisplaySize follows. The
-// shell.html sizes the canvas to 100vw/100vh in CSS, but the canvas's
-// internal pixel dimensions (and thus the WebGL framebuffer) are independent
-// — they only change when we set them.
+// Resize the canvas to match the given window dimensions and tell GLFW
+// about it so ImGui's IO.DisplaySize follows. The shell.html sizes the
+// canvas to 100vw/100vh via CSS, but the canvas's internal pixel
+// dimensions (and the WebGL framebuffer) are independent and only change
+// when we set them. We pull the CSS size in via EM_ASM rather than
+// emscripten_get_element_css_size: with -pthread + -sAUDIO_WORKLET the
+// generated wrapper for that API hits a "querySelector empty" runtime
+// error inside its event-handler dispatch path on emscripten 5.x, so
+// going through a small EM_ASM block sidesteps the whole proxy code.
 void syncCanvasToViewport(GLFWwindow* window) {
-  double cssW = 0, cssH = 0;
-  emscripten_get_element_css_size("#canvas", &cssW, &cssH);
-  int w = static_cast<int>(cssW);
-  int h = static_cast<int>(cssH);
+  int w = 0, h = 0;
+  EM_ASM({
+    var c = Module.canvas || document.getElementById('canvas');
+    if (!c) return;
+    var r = c.getBoundingClientRect();
+    HEAP32[$0 >> 2] = r.width  | 0;
+    HEAP32[$1 >> 2] = r.height | 0;
+  }, &w, &h);
   if (w <= 0 || h <= 0) return;
   emscripten_set_canvas_element_size("#canvas", w, h);
   glfwSetWindowSize(window, w, h);
@@ -170,15 +178,6 @@ void frameTick() {
   live::AudioEngine& engine = *g_app.engine;
   ComplexSignal& fftBuf = *g_app.fftBuf;
 
-#if defined(__EMSCRIPTEN__)
-  // No background audio thread on the web; keep the OpenAL queue topped up
-  // here. The queue itself holds NUM_AL_BUFFERS × CHUNK_SAMPLES (~160 ms)
-  // of audio — more than enough to span a 60 Hz frame and absorb the
-  // occasional browser stall. The default pump budget matches the queue
-  // depth so a single frame after a stall can fully refill it.
-  engine.pumpMainThread();
-#endif
-
   glfwPollEvents();
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();
@@ -195,6 +194,24 @@ void frameTick() {
     // frame — SetWindowFocus only finds windows that already exist.
     focusPrimary = true;
   }
+
+#if defined(__EMSCRIPTEN__)
+  // Browsers refuse to start AudioContext output without a user gesture.
+  // Watch for the first click or key press anywhere in the app and
+  // forward it to the engine, which creates the worklet and resumes the
+  // context. The call happens inside the same rAF tick as the
+  // GLFW-forwarded JS event, well inside the browser's transient
+  // activation window.
+  if (!engine.audioContextRunning()) {
+    ImGuiIO& io = ImGui::GetIO();
+    bool gesture = false;
+    for (int b = 0; b < IM_ARRAYSIZE(io.MouseClicked); ++b) {
+      if (io.MouseClicked[b]) { gesture = true; break; }
+    }
+    if (!gesture && ImGui::IsKeyPressed(ImGuiKey_Space, false)) gesture = true;
+    if (gesture) engine.requestAudioStart();
+  }
+#endif
 
   // Snapshot control state once per frame so the panels work against a
   // single consistent copy. The 2D panel updates uiTract -> calculateAll()
@@ -221,6 +238,29 @@ void frameTick() {
     focusPrimary = false;
     ImGui::SetWindowFocus("Primary Spectrum");
   }
+
+#if defined(__EMSCRIPTEN__)
+  // Until the user has clicked once, the AudioContext is suspended and
+  // the worklet has not yet been created. Show a centered banner so it's
+  // obvious why the app is silent — clicking anywhere dismisses it.
+  if (!engine.audioContextRunning()) {
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImVec2 center(vp->Pos.x + vp->Size.x * 0.5f,
+                  vp->Pos.y + vp->Size.y * 0.5f);
+    ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowBgAlpha(0.85f);
+    ImGuiWindowFlags overlayFlags = ImGuiWindowFlags_NoDecoration |
+                                    ImGuiWindowFlags_NoMove |
+                                    ImGuiWindowFlags_NoSavedSettings |
+                                    ImGuiWindowFlags_NoFocusOnAppearing |
+                                    ImGuiWindowFlags_NoNav |
+                                    ImGuiWindowFlags_AlwaysAutoResize;
+    if (ImGui::Begin("##audio_start_overlay", nullptr, overlayFlags)) {
+      ImGui::TextUnformatted("Click anywhere to start audio");
+    }
+    ImGui::End();
+  }
+#endif
 
   ImGui::Render();
   int displayW, displayH;
@@ -281,7 +321,15 @@ int main(int argc, char** argv) {
     return 1;
   }
   glfwMakeContextCurrent(window);
+#if !defined(__EMSCRIPTEN__)
+  // GLFW's emscripten port routes glfwSwapInterval to
+  // emscripten_set_main_loop_timing, which we haven't set up yet (that
+  // happens later via emscripten_set_main_loop). It logs a noisy "Cannot
+  // set timing mode for main loop since a main loop does not exist!"
+  // warning and is otherwise a no-op — the browser drives rendering via
+  // requestAnimationFrame either way.
   glfwSwapInterval(1);
+#endif
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();

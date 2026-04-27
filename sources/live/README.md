@@ -46,20 +46,45 @@ To run:
 
 ```sh
 cd build/wasm
-python3 -m http.server 8000
-# open http://localhost:8000/vtl_live.html
+emrun --no-browser --port 8000 vtl_live.html  # then visit http://localhost:8000/vtl_live.html
 ```
 
-Browsers gate audio playback on a user gesture, so press a slider or click
-once to unmute the OpenAL output.
+`emrun` (bundled with emsdk) serves the page with the `Cross-Origin-Opener-
+Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`
+headers, which the browser requires to enable `SharedArrayBuffer` — without
+those headers the audio worklet thread cannot start. The plain
+`python3 -m http.server` does not set the headers; if you prefer a custom
+server, configure it to send both COOP and COEP on the HTML / JS / WASM
+responses.
+
+Browsers gate audio playback on a user gesture, so click once on the
+"Click anywhere to start audio" overlay (or any control) to create the
+AudioContext and start the worklet.
+
+> **Pitfall:** opening Chrome DevTools while audio is playing makes the
+> worklet thread miss its 2.6 ms-per-quantum deadline (DevTools instruments
+> every wasm call). Chrome silently drops the processor after a few missed
+> quanta and the audio cuts to silence. Listen with DevTools closed; reopen
+> it to inspect the UI / sliders only when you don't need to hear the
+> output. The same effect cascades when `-sASSERTIONS=1` /
+> `-sSTACK_OVERFLOW_CHECK=2` are also enabled — those are off by default
+> on the wasm live target for that reason; flip them on with
+> `-DVTL_LIVE_WASM_ASSERTIONS=ON` only when you're chasing a crash.
 
 ### What changes for the browser build
 
-- The audio thread is replaced by `AudioEngine::pumpMainThread()`, which the
-  main loop calls every frame. OpenAL still queues + plays the same chunks;
-  it just runs cooperatively now.
+- Synthesis runs on a Web Audio AudioWorklet thread (a browser-managed
+  realtime audio thread), not on the UI thread. A long-running ImGui
+  frame, GC pause, or browser stall no longer drops audio.
+- The OpenAL backend is bypassed on the live build; the worklet's
+  process callback writes float samples straight into the Web Audio
+  graph. (The vtl synthesis code itself still pulls in OpenAL through
+  the upstream `io/SoundLib.cpp` for compile-time compatibility.)
 - The main loop is driven by `emscripten_set_main_loop()` instead of a
   blocking `while (!glfwWindowShouldClose(...))`.
-- The speaker file is preloaded into Emscripten's MEMFS at `/JD2.speaker`
-  via `--preload-file`.
+- The speaker files are preloaded into Emscripten's MEMFS at
+  `/JD2.speaker`, `/M01.speaker`, `/W02.speaker` via `--preload-file`.
 - GLSL preamble switches to `#version 300 es` to match WebGL2.
+- Build flags include `-pthread`, `-sAUDIO_WORKLET=1`, and
+  `-sWASM_WORKERS=1` — together they give us atomics, shared memory,
+  and emscripten's wasm audio worklet runtime.
