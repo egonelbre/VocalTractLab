@@ -673,6 +673,45 @@ if(VTL_BUILD_BENCHMARKS)
   )
 endif()
 
+# --- WASM benchmark ---------------------------------------------------------
+# Standalone harness mirroring synthesis_bench, designed to run under Node so
+# we can measure where the synthesizer actually spends its time on the WASM
+# target. Doesn't depend on Google Benchmark (no emscripten port available
+# through the project's vcpkg setup); uses a tiny built-in timing harness
+# instead. Speaker/gesture data are surfaced via --preload-file at the same
+# virtual paths the live build uses.
+#
+#   cmake --preset wasm
+#   cmake --build --preset wasm --target wasm_bench
+#   node build/wasm/wasm_bench.js 2
+if(EMSCRIPTEN)
+  add_executable(wasm_bench
+    benchmarks/wasm_bench.cpp
+    $<TARGET_OBJECTS:VocalTractLabApiObj>
+  )
+  target_include_directories(wasm_bench PRIVATE
+    sources/vtl/api
+  )
+  target_link_libraries(wasm_bench PRIVATE VocalTractLabApiObj)
+  # The bench is a pure CPU workload; it only needs the synth, MEMFS for the
+  # preloaded data files, and Node's process.exit. No threads, no audio
+  # context, no WebGL — keep the link line minimal so we measure the synth,
+  # not the runtime scaffolding.
+  target_compile_options(wasm_bench PRIVATE -pthread)
+  target_link_options(wasm_bench PRIVATE
+    -pthread
+    "SHELL:-sENVIRONMENT=node"
+    "SHELL:-sALLOW_MEMORY_GROWTH=1"
+    "SHELL:-sINITIAL_MEMORY=256MB"
+    "SHELL:-sSTACK_SIZE=2MB"
+    "SHELL:-sEXIT_RUNTIME=1"
+    "SHELL:-sPTHREAD_POOL_SIZE=0"
+    "SHELL:-sNODERAWFS=0"
+    "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/speakers/JD2.speaker@/JD2.speaker"
+    "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/example01.ges@/example01.ges"
+  )
+endif()
+
 # --- Tests ------------------------------------------------------------------
 # Hash-based regression tests for the synthesis pipeline. Each subtest
 # exercises one of the heavily-optimized code paths (geometry,

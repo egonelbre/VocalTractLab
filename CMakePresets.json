@@ -69,6 +69,7 @@
     { "name": "linux-release", "configurePreset": "linux-release" },
     { "name": "win-debug",   "configurePreset": "win-debug" },
     { "name": "win-release", "configurePreset": "win-release" },
-    { "name": "wasm",        "configurePreset": "wasm", "targets": ["vtl_live"] }
+    { "name": "wasm",        "configurePreset": "wasm", "targets": ["vtl_live"] },
+    { "name": "wasm-bench",  "configurePreset": "wasm", "targets": ["wasm_bench"] }
   ]
 }
