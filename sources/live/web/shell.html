@@ -20,6 +20,25 @@
         margin: 0;
         border: 0;
         background: #1d2330;
+        /*
+          touch-action: none disables the browser's default touch gestures
+          (scroll, pinch-zoom, double-tap-zoom). Without this, iPad/iPadOS
+          Safari treats finger taps as candidate scroll/zoom gestures: if
+          the gesture detector decides "this might be a scroll" it fires
+          touchcancel instead of touchend and never synthesizes a mouseup,
+          so GLFW's mouse-button callback never sees the release and ImGui
+          buttons stay "held". Apple Pencil bypasses gesture detection and
+          sends real pointerup events, which is why the Pen works fine
+          while finger touches feel sticky.
+          -webkit-touch-callout / -webkit-user-select prevent the long-press
+          callout (copy/paste/share menu) from interrupting drag gestures
+          on the vocal tract handles.
+        */
+        touch-action: none;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
       }
       canvas#canvas:focus { outline: none; }
     </style>
