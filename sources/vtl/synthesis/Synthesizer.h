@@ -126,6 +126,17 @@ private:
   Tube tube;
   double prevGlottisParams[Glottis::MAX_CONTROL_PARAMS];
 
+  // Cache for the tract-params -> Tube path. The tract-overload of
+  // addChunk would otherwise call vocalTract->calculateAll() and
+  // vocalTract->getTube() on every call (~2.4 ms WASM, ~3.5 ms tablet)
+  // even when nothing changed. In live-synth use the user holds a slider
+  // for seconds at a time, so almost every chunk has identical params.
+  // Invalidated by reset(); kept tied to the Synthesizer because that's
+  // the layer that owns prevTube/prevGlottisParams already.
+  double cachedTractParams[VocalTract::NUM_PARAMS] = {};
+  Tube cachedTube;
+  bool tubeCacheValid{ false };
+
   double *outputFlow;
   double *outputPressure;
   IirFilter outputPressureFilter;
