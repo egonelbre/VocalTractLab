@@ -233,7 +233,17 @@ class AudioEngine {
   // run in fixed-size chunks for steady CPU load) and the consumer (the
   // OpenAL queue on native, the AudioWorklet quantum on WASM). Both ends
   // run on the same thread, so a plain head/tail pair is enough.
-  static constexpr int SYNTH_CHUNK_SAMPLES = 480;  // 10 ms @ 48 kHz
+  //
+  // Sized to match the Web Audio worklet quantum (128 samples / 2.67 ms
+  // @ 48 kHz). On the WASM build with E1's tract cache landed,
+  // refillSynthRing now finishes in well under one quantum even on a
+  // tablet, so producing one chunk per worklet callback gives a flat
+  // CPU-load curve — every quantum does the same amount of work, no
+  // ~7-quanta sawtooth where one callback ran 480 samples' worth of
+  // synth in a 128-sample budget. Native (OpenAL queue, dedicated audio
+  // thread) is unaffected: it asks renderInto for whatever size it
+  // wants and the loop just iterates the refill.
+  static constexpr int SYNTH_CHUNK_SAMPLES = 128;  // 1 worklet quantum @ 48 kHz
   static constexpr int SYNTH_RING_CAP = SYNTH_CHUNK_SAMPLES * 2;
   float synthRing[SYNTH_RING_CAP] = {};
   int synthRingHead = 0;  // next sample to read
