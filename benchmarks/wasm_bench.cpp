@@ -195,6 +195,34 @@ int main(int argc, char** argv) {
     report(r);
   }
 
+  // ---- BM_SynthesisAddTract_Held (held vowel via tract API) -----------
+  {
+    std::vector<double> tractParams(numTract);
+    if (vtlGetTractParams("a", tractParams.data()) != 0) {
+      std::fprintf(stderr, "vtlGetTractParams(a) failed\n");
+      return 1;
+    }
+    std::vector<char> names(10 * numGlottis);
+    std::vector<double> gMin(numGlottis), gMax(numGlottis), gNeutral(numGlottis);
+    vtlGetGlottisParamInfo(names.data(), gMin.data(), gMax.data(),
+                           gNeutral.data());
+
+    if (vtlResetTractSynthesis() != 0) {
+      std::fprintf(stderr, "vtlResetTractSynthesis failed\n");
+      return 1;
+    }
+    std::vector<double> block(kBlockSamples);
+    vtlSynthesisAddTract(0, block.data(), tractParams.data(), gNeutral.data());
+
+    auto body = [&](int) {
+      vtlSynthesisAddTract(kBlockSamples, block.data(), tractParams.data(),
+                           gNeutral.data());
+    };
+    auto r = run_bench("BM_SynthesisAddTract_Held", min_seconds, 2000, body,
+                       kBlockSamples);
+    report(r);
+  }
+
   // ---- BM_GesturalScoreToAudio (end-to-end) ----------------------------
   {
     std::vector<double> audio(kAudioSampleRate * 30);

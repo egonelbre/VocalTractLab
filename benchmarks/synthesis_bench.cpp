@@ -133,6 +133,59 @@ static void BM_SynthesisAddTube_Block(benchmark::State& state) {
 BENCHMARK(BM_SynthesisAddTube_Block)->Unit(benchmark::kMicrosecond);
 
 // ---------------------------------------------------------------------------
+// Per-block synthesis driven through the tract API (held vowel).
+//
+// Mirrors the live AudioEngine::refillSynthRing path: every call passes the
+// same tractParams/glottisParams. vtlSynthesisAddTract internally runs
+// vocalTract->calculateAll() + getTube() before the per-sample TDS loop, so
+// this benchmark exposes wins from caching the tube when params don't
+// change (E1) and from skipping the per-sample tube interpolation when
+// prev == new (E2). Steady-state real-time bound is < 2.5 ms wall.
+static void BM_SynthesisAddTract_Held(benchmark::State& state) {
+  Api();
+
+  int audioSr = 0, numTube = 0, numTract = 0, numGlottis = 0;
+  vtlGetConstants(&audioSr, &numTube, &numTract, &numGlottis);
+
+  std::vector<double> tractParams(numTract);
+  if (vtlGetTractParams("a", tractParams.data()) != 0) {
+    state.SkipWithError("vtlGetTractParams(\"a\") failed");
+    return;
+  }
+
+  std::vector<char> names(10 * numGlottis);
+  std::vector<double> gMin(numGlottis), gMax(numGlottis), gNeutral(numGlottis);
+  vtlGetGlottisParamInfo(names.data(), gMin.data(), gMax.data(), gNeutral.data());
+
+  if (vtlResetTractSynthesis() != 0) {
+    state.SkipWithError("vtlResetTractSynthesis failed");
+    return;
+  }
+
+  std::vector<double> block(kBlockSamples);
+
+  // First call after reset must use numNewSamples=0 to seed initial state.
+  vtlSynthesisAddTract(0, block.data(), tractParams.data(), gNeutral.data());
+
+  for (auto _ : state) {
+    int rc = vtlSynthesisAddTract(kBlockSamples, block.data(),
+                                  tractParams.data(), gNeutral.data());
+    if (rc != 0) {
+      state.SkipWithError("vtlSynthesisAddTract failed");
+      return;
+    }
+    benchmark::DoNotOptimize(block.data());
+  }
+
+  const double audio_s_per_iter =
+      static_cast<double>(kBlockSamples) / kAudioSampleRate;
+  state.counters["block_audio_ms"] = audio_s_per_iter * 1000.0;
+  state.counters["RTF"] = benchmark::Counter(
+      audio_s_per_iter, benchmark::Counter::kIsIterationInvariantRate);
+}
+BENCHMARK(BM_SynthesisAddTract_Held)->Unit(benchmark::kMicrosecond);
+
+// ---------------------------------------------------------------------------
 // Tract-to-tube geometry conversion only (no acoustics).
 //
 // A useful baseline: every vtlSynthesisAddTract call internally does this.
