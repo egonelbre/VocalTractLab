@@ -12,18 +12,27 @@ a number from one machine isn't comparable to the same bench on another.
 
 E1 (Synthesizer tract cache) is the primary win: −50 % on
 `BM_SynthesisAddTract_Held` in WASM, bit-exact regression test, and the
-held-vowel cost converges to the per-sample TDS floor. E2/E3/E4 are
-cleanups within the noise floor on this workload. Each experiment lives
-on its own `perf/eN-*` branch; numbers below come from those branches
-in isolation.
+held-vowel cost converges to the per-sample TDS floor. E2 layered on top
+trims another ~2 %. E3, E4, and E7 (WASM SIMD) are cleanups within the
+noise floor on this workload. Each experiment lives on its own
+`perf/eN-*` branch; numbers below come from those branches in isolation
+unless otherwise marked. **E1 + E2 are landed on `main`.**
 
 | Experiment | `BM_SynthesisAddTract_Held` (WASM) | Status |
 |---|---:|:---:|
 | baseline | 1634 µs | — |
-| **E1** Synthesizer tract cache | **822 µs (−50 %)** | 🟢 |
-| E2 Skip per-sample interpolate when prev==new | 1601 µs (−2 %) | 🟢 |
-| E3 Hoist `prepareTimeStep` constants | 1646 µs (noise) | ⚫ |
-| E4 Cache `factor*sqrt(factor)` in `calcNoiseSample` | 1655 µs (noise) | ⚫ |
+| **E1** Synthesizer tract cache | **822 µs (−50 %)** | 🟢 landed |
+| **E2** Skip per-sample interpolate when prev==new | 1601 µs (−2 %) | 🟢 landed |
+| **E1 + E2 combined (current `main`)** | **807 µs (−51 %)** | 🟢 |
+| E3 Hoist `prepareTimeStep` constants | 1646 µs (noise) | ⚫ rejected |
+| E4 Cache `factor*sqrt(factor)` in `calcNoiseSample` | 1655 µs (noise) | ⚫ rejected |
+| E7 `-msimd128` on the WASM build (on top of E1+E2) | 801 µs (~0 %) | ⚫ rejected |
+
+After E1+E2, `BM_SynthesisAddTract_Held` (807 µs WASM) ≈
+`BM_SynthesisAddTube_Block` (822 µs WASM) — the per-chunk geometry cost
+is fully eliminated on the cache-hit path, leaving only the per-sample
+TDS solver. RTF for the held vowel jumps from 1.53 to 3.10 in WASM,
+giving roughly 2× headroom over the worklet quantum on a tablet.
 
 ## How to measure
 
@@ -102,9 +111,9 @@ whenever the tract is static.
 Implemented at the Synthesizer layer (not AudioEngine) so every caller
 benefits and the win is directly measurable in `BM_SynthesisAddTract_Held`.
 
-**Branch.** `perf/e1-tract-cache`
+**Branch.** `perf/e1-tract-cache` (cherry-picked onto `main` as `4b86606`).
 
-**Result.** **🎯 Big win.**
+**Result.** **🎯 Big win — landed on `main`.**
 
 | Bench | Native baseline | E1 native | Δ | WASM baseline | E1 WASM | Δ |
 |---|---:|---:|---:|---:|---:|---:|
@@ -134,9 +143,11 @@ sections.
 
 **Where.** `sources/vtl/synthesis/Synthesizer.cpp::addChunk` (Tube* overload).
 
-**Branch.** `perf/e2-skip-tube-interpolate`
+**Branch.** `perf/e2-skip-tube-interpolate` (cherry-picked onto `main` as
+`9d5f2a1`; regression hash re-baselined in `abcb777`).
 
-**Result.** Small win, well below original expectations.
+**Result.** Small win, well below original expectations — landed on
+`main` because it's a clean follow-on to E1.
 
 | Bench | Native baseline | E2 native | Δ | WASM baseline | E2 WASM | Δ |
 |---|---:|---:|---:|---:|---:|---:|
@@ -252,6 +263,43 @@ anatomy code that's been correct for ~20 years.
 
 **Result.** _(deferred — pursue only if E1+E5 don't fully solve the
 stutter on the worst tablet we care about)_
+
+---
+
+### ⚫ E7 — `-msimd128` on the WASM build
+
+**Hypothesis.** The WASM build is compiled without WebAssembly SIMD
+(`-msimd128` is not in the flag set). Adding it lets clang's
+autovectorizer emit 128-bit `v128` ops in hot FP loops, typically a
+1.5–3× lift on autovectorizable code.
+
+**Where.** `sources/vtl/api/...` — add `-msimd128` to
+`target_compile_options(VocalTractLabApiObj PUBLIC ...)` in the
+`EMSCRIPTEN` branch of `CMakeLists.txt`.
+
+**Branch.** `perf/e7-wasm-simd` (built on top of merged E1+E2 `main`).
+
+**Result.** **No measurable win on the synth path.**
+
+| Bench | E1+E2 (no SIMD) | E1+E2 + E7 (SIMD) | Δ |
+|---|---:|---:|---:|
+| `BM_TractToTube` | 2359 µs | 2351 µs | ~0 % |
+| `BM_GetTransferFunction` | 2968 µs | 2821 µs | **−5 %** |
+| `BM_SynthesisAddTube_Block` | 822 µs | 809 µs | ~0 % |
+| `BM_SynthesisAddTract_Held` | 807 µs | 801 µs | ~0 % |
+| `BM_GesturalScoreToAudio` | 1465 ms | 1456 ms | ~0 % |
+
+The TDS Cholesky inner loops index through
+`filledRowIndexSymmetricEnvelope[k][v]` on every iteration — clang
+can't reason about the data-dependent stride pattern, so it emits the
+scalar form regardless of `-msimd128`. Only the frequency-domain
+`TlModel` (used by `BM_GetTransferFunction`) sees a real lift, and
+that's not the path the live build runs.
+
+Also has a real cost: a SIMD-using module won't instantiate on
+browsers without WASM SIMD support (Safari < 16.4, Chrome < 91).
+Rejected on its own; revisit only as part of a TDS solver refactor
+that exposes vectorizable inner loops (E6 territory).
 
 ---
 
