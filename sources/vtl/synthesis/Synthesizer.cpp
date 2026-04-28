@@ -200,17 +200,32 @@ void Synthesizer::addChunk(double *newGlottisParams, Tube *newTube,
 
   // ****************************************************************
   // Run through all new samples.
+  //
+  // When prevTube == newTube — the steady-state case while the user
+  // holds a vocal tract shape — skip the per-sample tube interpolation
+  // entirely and just point at the constant tube. The 480 calls per
+  // chunk to Tube::interpolate (memberwise lerps over 103 sections)
+  // collapse to one memberwise copy.
   // ****************************************************************
 
   audio.resize(numSamples);
+
+  const bool tubeUnchanged = (prevTube == *newTube);
+  if (tubeUnchanged)
+  {
+    tube = *newTube;
+  }
 
   for (i = 0; i < numSamples; i++)
   {
     ratio = (double)i / (double)numSamples;
     ratio1 = 1.0 - ratio;
 
-    // Interpolate the tube.
-    tube.interpolate(&prevTube, newTube, ratio);
+    if (!tubeUnchanged)
+    {
+      // Interpolate the tube.
+      tube.interpolate(&prevTube, newTube, ratio);
+    }
 
     // Interpolate the glottis geometry.
     for (k = 0; k < numGlottisParams; k++)
