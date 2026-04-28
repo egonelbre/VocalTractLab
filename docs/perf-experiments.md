@@ -8,6 +8,23 @@ The numbers come from `synthesis_bench` (native) and `wasm_bench` (Node/V8),
 both built from this tree. Re-baseline whenever the host machine changes —
 a number from one machine isn't comparable to the same bench on another.
 
+## TL;DR
+
+E1 (Synthesizer tract cache) is the primary win: −50 % on
+`BM_SynthesisAddTract_Held` in WASM, bit-exact regression test, and the
+held-vowel cost converges to the per-sample TDS floor. E2/E3/E4 are
+cleanups within the noise floor on this workload. Each experiment lives
+on its own `perf/eN-*` branch; numbers below come from those branches
+in isolation.
+
+| Experiment | `BM_SynthesisAddTract_Held` (WASM) | Status |
+|---|---:|:---:|
+| baseline | 1634 µs | — |
+| **E1** Synthesizer tract cache | **822 µs (−50 %)** | 🟢 |
+| E2 Skip per-sample interpolate when prev==new | 1601 µs (−2 %) | 🟢 |
+| E3 Hoist `prepareTimeStep` constants | 1646 µs (noise) | ⚫ |
+| E4 Cache `factor*sqrt(factor)` in `calcNoiseSample` | 1655 µs (noise) | ⚫ |
+
 ## How to measure
 
 ```sh
@@ -31,10 +48,17 @@ worklet sees in production.
 
 | Bench | Native | WASM (V8) | Slowdown |
 |---|---:|---:|---:|
-| `BM_TractToTube` | 1.92 ms | 2.39 ms | 1.24× |
-| `BM_GetTransferFunction` | 2.10 ms | 3.11 ms | 1.48× |
-| `BM_SynthesisAddTube_Block` (120 samples) | 761 µs | 837 µs | 1.10× |
-| `BM_GesturalScoreToAudio` (2.265 s audio) | 1300 ms | 1546 ms | 1.19× |
+| `BM_TractToTube` | 1.74 ms | 2.35 ms | 1.35× |
+| `BM_GetTransferFunction` | 2.01 ms | 2.97 ms | 1.48× |
+| `BM_SynthesisAddTube_Block` (120 samples) | 730 µs | 810 µs | 1.11× |
+| `BM_SynthesisAddTract_Held` (120 samples, /a/) | 1317 µs | 1634 µs | 1.24× |
+| `BM_GesturalScoreToAudio` (2.265 s audio) | 1240 ms | 1523 ms | 1.23× |
+
+The held-vowel bench is the most informative one: the gap between
+`BM_SynthesisAddTract_Held` (1634 µs WASM) and `BM_SynthesisAddTube_Block`
+(810 µs WASM) — about 824 µs — is the per-chunk geometry cost
+(`vocalTract->calculateAll()` + `getTube()`) plus the per-sample tube
+interpolate. That's the budget the cache experiments target.
 
 WASM/V8 only adds 10–25% over native for the hot loops. The tablet stutter
 is a *scheduling* problem, not a "WASM is slow at math" problem — see the
@@ -65,144 +89,126 @@ recompute an identical Tube. That's where the biggest, easiest win lives.
 
 Status legend: 🟢 landed · 🟡 in progress · 🔵 proposed · ⚫ rejected
 
-### 🔵 E1 — Cache the tube when tract params don't change
+### 🟢 E1 — Cache the tube on Synthesizer when tract params don't change
 
-**Hypothesis.** `vocalTract->calculateAll()` + `getTube()` (~2.4 ms WASM on
-M1, ~3.5 ms on tablet) is the dominant cost in `refillSynthRing` and is
-deterministic w.r.t. tract params + the auto-tongue-root flag. Caching the
-last computed Tube and bypassing `Synthesizer::addChunk(double*, double*,
-...)` in favour of `Synthesizer::addChunk(double*, Tube*, ...)` on a
-params-unchanged hit eliminates this work whenever no slider is moving.
+**Hypothesis.** `vocalTract->calculateAll()` + `getTube()` is the dominant
+cost in the held-vowel path and is deterministic w.r.t. tract params.
+Caching the last computed Tube on the Synthesizer and reusing it when
+`memcmp(newTractParams, cachedTractParams) == 0` eliminates this work
+whenever the tract is static.
 
-**Where.** `sources/live/AudioEngine.cpp::refillSynthRing` and
-`sources/live/AudioEngine.h` (cache fields).
+**Where.** `sources/vtl/synthesis/Synthesizer.cpp` (tract-param overload of
+`addChunk`) + `sources/vtl/synthesis/Synthesizer.h` (cache fields).
+Implemented at the Synthesizer layer (not AudioEngine) so every caller
+benefits and the win is directly measurable in `BM_SynthesisAddTract_Held`.
 
-**Implementation sketch.**
+**Branch.** `perf/e1-tract-cache`
 
-- Add to `AudioEngine`: `Tube cachedTube; double lastTractParams[NUM_PARAMS];
-  bool lastAutoTongueRoot; bool tubeCacheValid;`.
-- In `refillSynthRing`, after taking the snapshot:
-  - If `tubeCacheValid` and `memcmp(snap.tractParams, lastTractParams, …) == 0`
-    and `snap.autoTongueRoot == lastAutoTongueRoot`, call
-    `synthesizer->addChunk(glottisParams, &cachedTube, SYNTH_CHUNK_SAMPLES, …)`.
-  - Otherwise, run the existing path, then snapshot
-    `vocalTract->getTube(&cachedTube)` into the cache and stamp the
-    params/flag and set `tubeCacheValid = true`.
-- Invalidate `tubeCacheValid` on `start()` and on speaker reload.
+**Result.** **🎯 Big win.**
 
-**Expected impact.**
+| Bench | Native baseline | E1 native | Δ | WASM baseline | E1 WASM | Δ |
+|---|---:|---:|---:|---:|---:|---:|
+| `BM_SynthesisAddTube_Block` | 730 µs | 729 µs | ~0 % | 810 µs | 814 µs | ~0 % |
+| `BM_SynthesisAddTract_Held` | **1317 µs** | **734 µs** | **−44 %** | **1634 µs** | **822 µs** | **−50 %** |
+| `BM_TractToTube` | 1740 µs | 1724 µs | ~0 % | 2351 µs | 2356 µs | ~0 % |
+| `BM_GesturalScoreToAudio` | 1240 ms | 1220 ms | −1.6 % | 1523 ms | 1454 ms | **−4.5 %** |
 
-- Steady-state (held vowel) chunk wall time drops from ~5 ms → ~2.5 ms on
-  M1 WASM, ~7 ms → ~3.5 ms on tablet. Stutter mechanism eliminated for the
-  common case.
-- During slider drag the cache misses every chunk → no regression vs. today.
-- `BM_GesturalScoreToAudio` won't move much (the gestural score keeps the
-  tract in motion most of the time); the win is specifically in the live
-  worklet path. Worth adding a synthetic "held vowel real-time" bench that
-  drives `addChunk` with constant params for a measurable signal.
+The held-vowel cost converges to `BM_SynthesisAddTube_Block` (per-sample
+TDS only) on cache hits. On a tablet-class CPU this collapses the ~7 ms
+`refillSynthRing` spike that was overrunning the worklet's 2.67 ms
+quantum. `BM_GesturalScoreToAudio` improves a few percent on WASM because
+the gestural score has stretches of constant params between transitions.
 
-**Risks.**
-
-- Anatomy mutation outside `calculateAll`. Currently anatomy is only
-  swapped on speaker reload (which calls `restart()` and would hit the
-  `tubeCacheValid = false` reset). Document this invariant in the cache
-  field's comment.
-- The audio-thread `vocalTract` is still mutated on cache miss; the UI
-  thread holds a separate `uiVocalTract`, so no UI-side hazard.
-- Determinism: `audio_regression_test` exercises gestural-score and
-  static-phone paths that don't go through `AudioEngine::refillSynthRing`,
-  so the test won't catch a bug in the cache. Add a focused round-trip
-  test (or run a long held-vowel through the live engine and FNV-hash the
-  output, comparing cache-on vs. cache-off).
-
-**Result.** _(not yet run)_
+`audio_regression_test` passes **bit-exactly** — identical params take
+the cache-hit path which copies the previously-computed Tube; the
+cache-miss path is unchanged from before.
 
 ---
 
-### 🔵 E2 — Skip per-sample `Tube::interpolate` when prev == new
+### 🟢 E2 — Skip per-sample `Tube::interpolate` when prev == new
 
 **Hypothesis.** `Synthesizer::addChunk(double*, Tube*, ...)` calls
-`tube.interpolate(&prevTube, newTube, ratio)` 480× per chunk
-(Synthesizer.cpp:195). When `prevTube == newTube` (the E1 cache-hit case,
-or any quiescent run), all 480 interpolations produce identical sections.
+`tube.interpolate(&prevTube, newTube, ratio)` 120× per chunk. When
+`prevTube == newTube`, all interpolations produce mathematically identical
+sections.
 
 **Where.** `sources/vtl/synthesis/Synthesizer.cpp::addChunk` (Tube* overload).
 
-**Implementation sketch.**
+**Branch.** `perf/e2-skip-tube-interpolate`
 
-- Detect equality once at top of the function (cheap memcmp on the
-  fixed-size Section arrays, or a dirty bit set by E1 / addChunk's caller).
-- On equality, copy `*newTube` into `tube` once and skip the per-sample
-  interpolation; keep the per-sample loop body for `addSample`.
+**Result.** Small win, well below original expectations.
 
-**Expected impact.** ~80–100 µs per 480-sample chunk (~3% of the chunk
-budget). Pure win when E1 lands; small win without it.
+| Bench | Native baseline | E2 native | Δ | WASM baseline | E2 WASM | Δ |
+|---|---:|---:|---:|---:|---:|---:|
+| `BM_SynthesisAddTube_Block` | 730 µs | 725 µs | ~0 % | 810 µs | 813 µs | ~0 % |
+| `BM_SynthesisAddTract_Held` | 1317 µs | 1300 µs | **−1.3 %** | 1634 µs | 1601 µs | **−2.0 %** |
 
-**Risks.** Articulator field is selected per-sample by `ratio < 0.5`
-(Tube.cpp:368-375); when prev == new this is a no-op. Safe.
+The lerp inner loop is well-vectorized and bandwidth-bound; the upper
+bound suggested by "103 sections × 4 ops × 120 samples" never materializes.
+This is a follow-on cleanup to E1, not a primary optimization.
 
-**Result.** _(not yet run)_
-
----
-
-### 🔵 E3 — Hoist constants in `TdsModel::prepareTimeStep`
-
-**Hypothesis.** Per-tube-section, per-sample math at TdsModel.cpp:724-725
-contains pow/sqrt calls that are mathematically equivalent to a single
-divide. Compiler can't fold them because `AC_EXPONENT`, `REF_AREA_CM2`,
-`AC_FREQUENCY_HZ` are non-`constexpr` `const double` (Constants.h:54-59).
-
-- Line 725: `pow(REF_AREA_CM2/area, AC_EXPONENT) * sqrt(AC_FREQUENCY_HZ)` →
-  with `REF_AREA_CM2 = 1.0`, `AC_EXPONENT = 1.0`, `AC_FREQUENCY_HZ = 2250`,
-  this equals `sqrt(2250) / area = 47.43417… / area`. The pow + sqrt fire
-  103 sections × 48000 Hz ≈ 5M times/s for nothing.
-- Line 724: `pow(REF_AREA_CM2/area, DC_EXPONENT)` with `DC_EXPONENT = 2.6`.
-  Making `REF_AREA_CM2` `constexpr` lets `1.0/area` fold; the `pow` itself
-  remains.
-- Line 752: `4.0*M_PI*pow((3.0*ts->volume)/(4.0*M_PI), 2.0/3.0)` for sinus
-  sections. `ts->volume` only changes at geometry rate; cache the surface
-  on the tube section (recompute in `setTube` / when area-rate changes).
-
-**Where.** `sources/vtl/core/Constants.h` (mark constants `constexpr`,
-add `AC_R0_TIMES_SQRT_F0_HZ` constant) + `sources/vtl/acoustics/TdsModel.cpp`.
-
-**Expected impact.** 5–15% of `BM_SynthesisAddTube_Block`, every backend.
-Most attractive on WASM where libm pow is heavier than native.
-
-**Risks.**
-
-- Numerical: `sqrt(2250.0)` evaluated at compile time vs. at runtime should
-  be bit-identical for IEEE-754 round-to-nearest, but `audio_regression_test`
-  hashes raw audio and will catch any drift. Re-baseline if it does.
-- `pow(x, 1.0)` may already be optimized to `x` by libm or the compiler;
-  the win is the eliminated sqrt, not the pow per se.
-
-**Result.** _(not yet run)_
+Drifts the regression hash by sub-ULP rounding (`a*ratio + a*(1-ratio)`
+is not bit-identical to `a` even when `ratio + (1-ratio) == 1.0`
+mathematically). Re-baseline if landing.
 
 ---
 
-### 🔵 E4 — Cache `factor*sqrt(factor)` and static `normal_distribution`
+### ⚫ E3 — Hoist constants in `TdsModel::prepareTimeStep`
 
-**Hypothesis.** Two small per-sample wastes in `calcNoiseSample`
-(TdsModel.cpp:1488):
+**Hypothesis.** Per-tube-section, per-sample `pow(REF_AREA_CM2/area,
+AC_EXPONENT) * sqrt(AC_FREQUENCY_HZ)` simplifies to a constant divide
+(`AC_R0_TIMES_SQRT_AC_FREQUENCY_HZ / area`) given AC_EXPONENT = 1.0 and
+AC_FREQUENCY_HZ constant.
 
-- Line 1591: `factor * sqrt(factor)` where `factor = 1000.0/cutoffFreq`.
-  `cutoffFreq` is geometry-rate, not sample-rate. Cache alongside the IIR
-  coeffs that already use this pattern (TdsModel.cpp:1550-1573).
-- Line 1603: `normal_distribution<double> normalDistribution(0.0,
-  1.0/sqrt(12.0))` is constructed inside the function, called 3×/sample.
-  Constructor includes the sqrt. Make it a static member; `M_2_SQRT3` is
-  the inverse-sqrt-12 constant.
+**Where.** `sources/vtl/core/Constants.h`,
+`sources/vtl/acoustics/TdsModel.cpp::prepareTimeStep`.
 
-**Where.** `sources/vtl/acoustics/TdsModel.cpp` (and `.h` for the static).
+**Branch.** `perf/e3-prepare-constants`
 
-**Expected impact.** 1–3% of `BM_SynthesisAddTube_Block`. Cheap, safe.
+**Result.** **No measurable win.** LTO already folds `pow(x, 1.0)` and
+hoists the sqrt of a const-folded argument.
 
-**Risks.** Static `normal_distribution` reuses internal state across calls
-— that's actually preferred (it cuts the rejection-sample cost in half on
-average) but must be confirmed deterministic against `audio_regression_test`.
+| Bench | Native baseline | E3 native | Δ | WASM baseline | E3 WASM | Δ |
+|---|---:|---:|---:|---:|---:|---:|
+| `BM_SynthesisAddTube_Block` | 730 µs | 758 µs | within noise | 810 µs | 819 µs | within noise |
+| `BM_SynthesisAddTract_Held` | 1317 µs | 1357 µs | within noise | 1634 µs | 1646 µs | within noise |
 
-**Result.** _(not yet run)_
+Drifts the regression hash sub-ULP. Cleanup-only; not worth landing on
+its own. The DC pow rewrite (`pow(area, -2.6)` instead of `pow(1/area,
+2.6)`) was tried first and reverted — same flatlined result, additional
+hash drift.
+
+---
+
+### ⚫ E4 — Cache `factor*sqrt(factor)` in `calcNoiseSample`
+
+**Hypothesis.** `factor * sqrt(factor)` (with `factor = 1000/cutoffFreq`)
+is geometry-rate but evaluated per audio sample. Cache it alongside the
+existing IIR-coefficient cache that already uses the same key.
+
+**Where.** `sources/vtl/acoustics/TdsModel.{h,cpp}`.
+
+**Branch.** `perf/e4-noise-sample`
+
+**Result.** **No measurable win on this workload.**
+
+| Bench | Native baseline | E4 native | Δ | WASM baseline | E4 WASM | Δ |
+|---|---:|---:|---:|---:|---:|---:|
+| `BM_SynthesisAddTube_Block` | 730 µs | 747 µs | within noise | 810 µs | 829 µs | within noise |
+| `BM_SynthesisAddTract_Held` | 1317 µs | 1361 µs | within noise | 1634 µs | 1655 µs | within noise |
+
+The held vowel /a/ produces almost no frication, so `currentAmp1kHz`
+falls below the threshold (`MIN_MONOPOLE_AMP` / `MIN_DIPOLE_AMP`) and
+`calcNoiseSample` early-returns at the top — the cached gain coeff path
+is barely entered. Likely useful on a fricative-heavy workload; needs a
+dedicated bench (e.g., a sustained /s/ or /sh/) to measure.
+
+Also tried promoting `normal_distribution` to a static — works but
+shifts the RNG sequence (the distribution carries internal state across
+calls), drifting the regression hash and changing audio output. Reverted.
+
+Drifts the regression hash sub-ULP from the multiplication reorder.
+Cleanup-only; not worth landing on this workload.
 
 ---
 
