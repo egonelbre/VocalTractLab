@@ -38,6 +38,11 @@ is fully eliminated on the cache-hit path, leaving only the per-sample
 TDS solver. RTF for the held vowel jumps from 1.53 to 3.10 in WASM,
 giving roughly 2× headroom over the worklet quantum on a tablet.
 
+**On-device verification (2026-04-28).** Audio is "much better" on the
+tablet — the original stutter is gone. E1+E2+E5 together solved the
+case that motivated this work; no further follow-up needed unless a
+new regression shows up.
+
 ## How to measure
 
 ```sh
