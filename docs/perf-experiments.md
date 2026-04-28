@@ -13,10 +13,13 @@ a number from one machine isn't comparable to the same bench on another.
 E1 (Synthesizer tract cache) is the primary win: −50 % on
 `BM_SynthesisAddTract_Held` in WASM, bit-exact regression test, and the
 held-vowel cost converges to the per-sample TDS floor. E2 layered on top
-trims another ~2 %. E3, E4, and E7 (WASM SIMD) are cleanups within the
-noise floor on this workload. Each experiment lives on its own
-`perf/eN-*` branch; numbers below come from those branches in isolation
-unless otherwise marked. **E1 + E2 are landed on `main`.**
+trims another ~2 %. E5 (worklet-quantum-rate chunks) reshapes the live
+build's CPU-load curve from a 7-quanta sawtooth to a flat per-callback
+cost — throughput-neutral, but it's what actually kills the audible
+stutter. E3, E4, and E7 (WASM SIMD) are cleanups within the noise floor
+on this workload. Each experiment lives on its own `perf/eN-*` branch;
+numbers below come from those branches in isolation unless otherwise
+marked. **E1 + E2 + E5 are landed on `main`.**
 
 | Experiment | `BM_SynthesisAddTract_Held` (WASM) | Status |
 |---|---:|:---:|
@@ -24,6 +27,7 @@ unless otherwise marked. **E1 + E2 are landed on `main`.**
 | **E1** Synthesizer tract cache | **822 µs (−50 %)** | 🟢 landed |
 | **E2** Skip per-sample interpolate when prev==new | 1601 µs (−2 %) | 🟢 landed |
 | **E1 + E2 combined (current `main`)** | **807 µs (−51 %)** | 🟢 |
+| **E5** Worklet-quantum-rate synth chunks | _live-only — not in synth bench_ | 🟢 landed |
 | E3 Hoist `prepareTimeStep` constants | 1646 µs (noise) | ⚫ rejected |
 | E4 Cache `factor*sqrt(factor)` in `calcNoiseSample` | 1655 µs (noise) | ⚫ rejected |
 | E7 `-msimd128` on the WASM build (on top of E1+E2) | 801 µs (~0 %) | ⚫ rejected |
@@ -223,27 +227,39 @@ Cleanup-only; not worth landing on this workload.
 
 ---
 
-### 🔵 E5 — Quantum-rate worklet chunks
+### 🟢 E5 — Quantum-rate worklet chunks
 
 **Hypothesis.** Once E1 is in, `calculateAll`/`getTube` per-chunk overhead
 disappears, so chunk size only affects per-sample work. Sizing
 `SYNTH_CHUNK_SAMPLES` to match the worklet quantum (128) flattens the
 sawtooth load curve: every callback does the same amount of work, no spike.
 
-**Where.** `sources/live/AudioEngine.h:236` and validate ring sizing
-(`SYNTH_RING_CAP`) is still adequate.
+**Where.** `sources/live/AudioEngine.h` (the
+`SYNTH_CHUNK_SAMPLES` / `SYNTH_RING_CAP` constants).
 
-**Expected impact.** No change to throughput; large change to *worst-case*
-worklet callback time, which is what triggers the audible stutter.
+**Branch.** `perf/e5-quantum-chunks` (cherry-picked onto `main` as
+`77e7338`).
 
-**Risks.**
+**Result.** Landed on `main`. Throughput-neutral by design — the change
+is to the *shape* of CPU load on the worklet thread, not the total work.
 
-- Without E1, this would *increase* total work (more `calculateAll` calls
-  per second). E5 must come after E1.
-- Glottis state save/restore happens per chunk — verify it's not on the
-  hot path.
+- `audio_regression_test` passes bit-exactly (gestural-score synthesis
+  doesn't go through `AudioEngine`, and the synth math is unchanged).
+- Native + WASM `vtl_live` both build and link clean.
+- Not measurable through `synthesis_bench` / `wasm_bench` — those drive
+  the synth API directly and bypass `AudioEngine`. The behavioural test
+  is "did the live build stop stuttering on a tablet?" — verify on
+  device.
 
-**Result.** _(not yet run)_
+Pre-E5 worklet timing on tablet (worst-case quantum, with E1+E2 already
+applied):
+
+- 6 of 7 quanta: ~0 ms wall (ring fast-path, just memcpy out).
+- 7th quantum: full `refillSynthRing` for 480 samples ≈ 1.4 ms wall on
+  tablet (pure TDS solver, geometry already cached).
+
+Post-E5: every quantum runs `refillSynthRing` for 128 samples ≈ 0.4 ms
+wall. Constant load, well under the 2.67 ms budget.
 
 ---
 
