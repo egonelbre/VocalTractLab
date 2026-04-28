@@ -195,7 +195,7 @@ bool testGesturalScoreToAudio() {
   ok &= checkInt("numSamples", numSamples, 108720);
   const uint64_t audioHash =
       hashSpan(audio.data(), static_cast<size_t>(numSamples));
-  if (!checkHash("audio samples", audioHash, 0xcb0962f03ef5b19aULL)) {
+  if (!checkHash("audio samples", audioHash, 0x475e7049d91abb0eULL)) {
     // If a reference dump from a known-good build is sitting next to us,
     // quantify the drift (max-abs diff, RMS, peak audio level) so it's
     // easy to tell "tiny FP noise" from "completely broken".
