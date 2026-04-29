@@ -173,6 +173,7 @@ void VocalTract::init()
     "  <param index=\"18\" name=\"TS3\"  min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "  <param index=\"19\" name=\"AES\"  min=\"0.0\"  max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "  <param index=\"20\" name=\"MCO\"  min=\"0.0\"  max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
+    "  <param index=\"21\" name=\"TT\"   min=\"0.0\"  max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "</anatomy>";
 
   // ****************************************************************
@@ -222,6 +223,7 @@ void VocalTract::init()
   params[TS3].name = "Tongue side elevation 3";
   params[AES].name = "AES / epilaryngeal narrowing (twang)";
   params[MCO].name = "Oropharyngeal narrowing";
+  params[TT].name  = "Thyroid forward tilt";
 
 
   // ****************************************************************
@@ -1546,16 +1548,22 @@ void VocalTract::readAnatomyXml(XmlNode *anatomyNode){
       params[m].limitedX = params[m].neutral;
     }
 
-    // All parameters must have been read !!! 
-
-    bool ok = true;
-    for (i=0; i < NUM_PARAMS; i++) 
-    { 
-      if (paramRead[i] == false) { ok = false; }
-    }
-    if (ok == false)
+    // Older speaker files predate newer params (e.g. TT, added in
+    // Stage 2 of the voice-quality refactor). Don't fail the load —
+    // each VocalTract is constructed with the built-in defaults from
+    // the static XML blob first, so any param the speaker file
+    // omits keeps its sensible default (typically neutral = 0).
+    // Print a one-line warning per missing param so it's still
+    // visible if a real speaker-file mistake creeps in.
+    for (i=0; i < NUM_PARAMS; i++)
     {
-      throw "Fatal error: Not all of the vocal tract parameters could be initialized from the Xml file!";
+      if (paramRead[i] == false)
+      {
+        fprintf(stderr,
+                "Warning: speaker file does not declare param "
+                "index %d (%s); using built-in default.\n",
+                i, params[i].abbr.c_str());
+      }
     }
 
   }
@@ -5720,62 +5728,12 @@ void VocalTract::calcCrossSections()
     int   ribClIndex;
     double ribClT;
 
-    // ============================================================
-    // Sub-block: aesEpiglottisAP
-    // The aryepiglottic folds and epiglottic base move posteriorly.
-    // We slide the EPIGLOTTIS surface in the -x direction (toward
-    // the back wall) by an amount derived from the AES factor at
-    // the surface's anchor point. (Stage 2 will move this gesture
-    // onto a new TT — thyroid forward tilt — param, since the
-    // backward-tilting epiglottis is physiologically a CT/thyroid-
-    // tilt action rather than the AES sphincter itself.)
-    // ============================================================
-    if (aesFactor < 1.0)
-    {
-      Surface* eg = &surfaces[EPIGLOTTIS];
-      Point2D anchor = eg->getVertex(0, eg->numRibPoints / 2).toPoint2D();
-      double pos = getCenterLinePos(anchor, ribClIndex, ribClT);
-      double factor = 1.0;
-      if (aesValid && (pos > aesStart_cm) && (pos < aesEnd_cm))
-      {
-        double t = (pos - aesStart_cm) / (aesEnd_cm - aesStart_cm);
-        double window = 0.5 - 0.5 * cos(t * 2.0 * M_PI);
-        factor = 1.0 - (1.0 - aesFactor) * window;
-      }
-      else if (pos <= aesStart_cm)
-      {
-        // Anchor sits below the AES window — apply the centre-of-window
-        // strength so the user still sees the AES respond to the param.
-        factor = aesFactor;
-      }
-      if (factor < 1.0)
-      {
-        const double MAX_AES_SHIFT_CM = 0.5;
-        double delta = MAX_AES_SHIFT_CM * (1.0 - factor) / FULL_REDUCTION;
-        for (int ri = 0; ri < eg->numRibs; ri++)
-        {
-          for (int k = 0; k < eg->numRibPoints; k++)
-          {
-            Point3D v = eg->getVertex(ri, k);
-            eg->setVertex(ri, k, v.x - delta, v.y, v.z);
-          }
-        }
-        // Re-mirror the deformation onto the two-side variant so the
-        // 3D mesh reflects it (the primary→two-side copy step in
-        // calcSurfaces has already run by this point).
-        Surface* egTw = &surfaces[EPIGLOTTIS_TWOSIDE];
-        for (int ri = 0; ri < egTw->numRibs; ri++)
-        {
-          for (int k = 0; k < eg->numRibPoints; k++)
-          {
-            Point3D P = eg->getVertex(ri, k);
-            egTw->setVertex(ri, k, P);
-            P.z = -P.z;
-            egTw->setVertex(ri, egTw->numRibPoints - 1 - k, P);
-          }
-        }
-      }
-    }
+    // (The former aesEpiglottisAP sub-block — backward translation of
+    // the EPIGLOTTIS surface — has moved to a separate TT block
+    // immediately after this AES/MCO gate. Backward tilt of the
+    // epiglottis is physiologically driven by thyroid forward tilt
+    // (CT action), not by the AES sphincter, and the two are now
+    // controllable independently.)
 
     // ============================================================
     // Sub-block: mcoTongueRoot
@@ -5879,6 +5837,62 @@ void VocalTract::calcCrossSections()
       // sphincter constriction in 3D.
       applyMLNarrowing(&surfaces[EPIGLOTTIS], &surfaces[EPIGLOTTIS_TWOSIDE],
                        0, NUM_EPIGLOTTIS_RIBS - 1);
+    }
+  }
+
+  // ****************************************************************
+  // Sub-block: ttEpiglottisTilt
+  // Thyroid forward tilt (TT, 0..1). Cricothyroid contraction tilts
+  // the thyroid cartilage forward, which mechanically pulls the
+  // epiglottis body backward toward the arytenoids. We model this
+  // as a rotation of the EPIGLOTTIS surface around its inferior
+  // anchor (rib 0, midline point) in the AP plane: the base stays
+  // fixed, the upper portion swings backward in -x. Independent of
+  // AES — Stage 2 separated the two so Belt (AES, no tilt) and
+  // Squillo (AES + tilt) can be represented distinctly.
+  //
+  // 20° max angle at TT=1 corresponds roughly to the previous
+  // uniform 5 mm shift of an ~1.5 cm tall epiglottis.
+  // ****************************************************************
+  {
+    double ttParam = params[TT].x;
+    if (ttParam < 0.0) ttParam = 0.0;
+    if (ttParam > 1.0) ttParam = 1.0;
+    if (ttParam > 0.0)
+    {
+      const double MAX_TT_ANGLE_RAD = 20.0 * M_PI / 180.0;
+      double angle = MAX_TT_ANGLE_RAD * ttParam;
+      double cosA = cos(angle);
+      double sinA = sin(angle);
+
+      Surface* eg = &surfaces[EPIGLOTTIS];
+      // Inferior anchor: midpoint of rib 0. The petiole sits at the
+      // base of the epiglottis — that's the cartilage's pivot.
+      Point2D A = eg->getVertex(0, eg->numRibPoints / 2).toPoint2D();
+      for (int ri = 0; ri < eg->numRibs; ri++)
+      {
+        for (int k = 0; k < eg->numRibPoints; k++)
+        {
+          Point3D v = eg->getVertex(ri, k);
+          double dx = v.x - A.x;
+          double dy = v.y - A.y;
+          double newX = dx * cosA - dy * sinA + A.x;
+          double newY = dx * sinA + dy * cosA + A.y;
+          eg->setVertex(ri, k, newX, newY, v.z);
+        }
+      }
+      // Re-mirror onto the two-side variant for the 3D view.
+      Surface* egTw = &surfaces[EPIGLOTTIS_TWOSIDE];
+      for (int ri = 0; ri < egTw->numRibs; ri++)
+      {
+        for (int k = 0; k < eg->numRibPoints; k++)
+        {
+          Point3D P = eg->getVertex(ri, k);
+          egTw->setVertex(ri, k, P);
+          P.z = -P.z;
+          egTw->setVertex(ri, egTw->numRibPoints - 1 - k, P);
+        }
+      }
     }
   }
 

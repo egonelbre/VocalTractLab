@@ -152,6 +152,13 @@ void renderControlsPanel(AudioEngine& engine, FrameSnapshot& snap) {
     tractSlider(VocalTract::AES, "AES (epilarynx)");
     tractSlider(VocalTract::MCO, "Oropharynx (megaphone)");
 
+    // Thyroid forward tilt — cricothyroid action. Tilts the upper
+    // epiglottis backward toward the arytenoids. Independent of AES;
+    // the Belt vs Squillo / Edge vs Opera distinction in pedagogy
+    // turns largely on this gesture.
+    ImGui::SeparatorText("Larynx posture");
+    tractSlider(VocalTract::TT, "Thyroid tilt");
+
     ImGui::PopItemWidth();
   }
 
