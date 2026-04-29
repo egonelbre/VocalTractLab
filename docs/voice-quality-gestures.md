@@ -795,9 +795,18 @@ Stage 3 task description, not a separate stage:
   inertive reactance fed back to the Glottis driving pressure. Out of
   scope for the area-function refactor — the only way to capture the
   +10–15 dB "free gain" of twang therapy in simulation.
-- **Pitch-aware AES factor.** Inverse F0 envelope (Yanagi 21% vs 50%).
-  Cheap to add after stage 3; do once we have measured outputs to
-  compare against.
+- ~~**Pitch-aware AES factor.**~~ *Considered and rejected.* Yanagi
+  observes 50% AES area reduction at low pitch vs 21% at high pitch,
+  attributed to the cricothyroid stretch tensing the aryepiglottic
+  tissue. The 21% figure is a population mean across professional
+  singers in an MRI study, not a hard biomechanical ceiling — a
+  trained singer pushing harder may well exceed it. Imposing the
+  envelope automatically would tell the user "you can't" when in
+  principle they often can, and the synth's job is to preserve
+  capability, not to model typical singer behaviour. Presets that
+  want to reflect operatic / soprano norms can dial AES down at
+  high pitch explicitly; the slider itself stays full-range at any
+  F0.
 
 ## References
 
