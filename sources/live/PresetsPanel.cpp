@@ -453,12 +453,31 @@ void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
   // Oral / Nasal sub-row that's only meaningful for non-Neutral
   // presets, and a "Lock reference posture" checkbox that controls
   // whether the preset also writes HY / JA / LD / TCY / LP.
+  //
+  // Manual flex-wrap: the panel is left-docked and the labels are
+  // wide ("Soprano F1-tune"), so eight buttons don't fit on one row
+  // in the default layout. Same idiom used further down for the
+  // tract-shape grid: SmallButton width = textWidth + 2 * padding;
+  // chain SameLine while the next button still fits, otherwise let
+  // ImGui drop to a fresh row.
+  const ImGuiStyle& vqStyle = ImGui::GetStyle();
+  const float vqWindowEnd = ImGui::GetWindowPos().x +
+                            ImGui::GetWindowContentRegionMax().x;
+  auto smallButtonWidth = [&](const char* label) {
+    return ImGui::CalcTextSize(label).x + 2.0f * vqStyle.FramePadding.x;
+  };
+
   ImGui::SeparatorText("Voice quality");
   ImGui::PushID("voice-quality");
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f));
   for (int i = 0; i < kNumVoiceQualityPresets; ++i) {
-    if (i > 0) ImGui::SameLine();
     const VoiceQualityPreset& preset = kVoiceQualityPresets[i];
+    if (i > 0) {
+      float lastX2 = ImGui::GetItemRectMax().x;
+      float nextX2 = lastX2 + vqStyle.ItemSpacing.x +
+                     smallButtonWidth(preset.name);
+      if (nextX2 < vqWindowEnd) ImGui::SameLine();
+    }
     bool selected = (i == vqState.activePreset);
     if (segmentedButton(preset.name, selected)) {
       vqState.activePreset = i;
@@ -487,13 +506,18 @@ void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
   ImGui::PopStyleVar();
   ImGui::PopID();
 
-  // Oral / Nasal sub-row + Lock toggle.
+  // Oral / Nasal sub-row + Lock toggle. Same wrap pattern.
   ImGui::PushID("voice-quality-sub");
   bool isNeutral = (vqState.activePreset == 0);
   ImGui::BeginDisabled(isNeutral);
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f));
   for (int i = 0; i < 2; ++i) {
-    if (i > 0) ImGui::SameLine();
+    if (i > 0) {
+      float lastX2 = ImGui::GetItemRectMax().x;
+      float nextX2 = lastX2 + vqStyle.ItemSpacing.x +
+                     smallButtonWidth(kOralNasalPresets[i].label);
+      if (nextX2 < vqWindowEnd) ImGui::SameLine();
+    }
     bool selected = (vqState.oralNasalMode == i);
     if (segmentedButton(kOralNasalPresets[i].label, selected)) {
       vqState.oralNasalMode = selected ? -1 : i;  // toggle off if same
@@ -512,10 +536,20 @@ void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
   }
   ImGui::PopStyleVar();
   ImGui::EndDisabled();
-  ImGui::SameLine();
   // Lock toggle: changing it doesn't re-apply on its own; the user
   // re-clicks a preset (or it takes effect on the next vowel click,
-  // whose skip-list grows / shrinks accordingly).
+  // whose skip-list grows / shrinks accordingly). Inline on the same
+  // row when there's room, otherwise wrap.
+  {
+    float lastX2 = ImGui::GetItemRectMax().x;
+    const char* lockLabel = "Lock reference posture";
+    // Checkbox width = box + label.
+    float checkboxW = ImGui::GetFrameHeight() +
+                      vqStyle.ItemInnerSpacing.x +
+                      ImGui::CalcTextSize(lockLabel).x;
+    float nextX2 = lastX2 + vqStyle.ItemSpacing.x + checkboxW;
+    if (nextX2 < vqWindowEnd) ImGui::SameLine();
+  }
   ImGui::Checkbox("Lock reference posture", &vqState.lockReferencePosture);
   ImGui::PopID();
   ImGui::Spacing();
