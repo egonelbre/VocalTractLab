@@ -394,7 +394,11 @@ void applyGlottisShape(AudioEngine& engine, FrameSnapshot& snap,
 void renderTractShapesPanel(AudioEngine& engine, FrameSnapshot& snap,
                             const std::vector<SpeakerOption>& speakers,
                             ImFont* buttonFont) {
-  ImGui::Begin("Presets");
+  // The visible title is "Presets" (Stage 5 broadened the panel
+  // beyond just tract shapes), but the ID after `###` stays as the
+  // legacy "Tract Shapes" so existing user imgui.ini docking layouts
+  // and the DockBuilderDockWindow call in main.cpp keep matching.
+  ImGui::Begin("Presets###Tract Shapes");
 
   static ShapeInterpolation interp;
   static VoiceQualityState vqState;

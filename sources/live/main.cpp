@@ -155,11 +155,13 @@ void buildDefaultDockLayout(ImGuiID dockspace_id) {
   ImGuiID rtTract3dId, rtVowelId;
   ImGui::DockBuilderSplitNode(rtRest, ImGuiDir_Left, 0.5f, &rtTract3dId,
                               &rtVowelId);
-  // Split the left strip into Tract Shapes (top) and Controls (bottom).
-  // Tract Shapes is button-dense and reads well in a constrained box;
-  // the Controls sliders need the full panel width regardless, so the
-  // bottom half gives them enough vertical room for the Articulation
-  // and Glottis sections.
+  // Split the left strip into Presets (top) and Controls (bottom).
+  // The Presets panel is button-dense and reads well in a constrained
+  // box; the Controls sliders need the full panel width regardless, so
+  // the bottom half gives them enough vertical room for the
+  // Articulation and Glottis sections. The dock window ID is the
+  // legacy "Tract Shapes" string (stable across the Stage 5 relabel
+  // to "Presets" — the panel uses Begin("Presets###Tract Shapes")).
   ImGuiID leftTopId, leftBottomId;
   ImGui::DockBuilderSplitNode(leftId, ImGuiDir_Up, 0.5f, &leftTopId,
                               &leftBottomId);
