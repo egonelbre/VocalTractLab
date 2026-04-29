@@ -27,6 +27,17 @@ constexpr int TS_PARAM_IDX[3] = {VocalTract::TS1, VocalTract::TS2,
                                   VocalTract::TS3};
 constexpr const char* TS_LABEL[3] = {"TS1 (back)", "TS2 (mid)", "TS3 (front)"};
 
+// Voice-quality inset layout. Mirrors the tongue-side inset but
+// occupies the top-right corner of the canvas. Three handles for the
+// supraglottal voice-quality atoms — AES (epilarynx narrowing, 0..1),
+// TT (thyroid forward tilt, 0..1), PW (signed pharyngeal width,
+// -1..+1). Same mid-baseline convention as the tongue-side inset:
+// dragging up = +ve param value, dragging down = -ve. AES and TT
+// stay in the upper half because they're 0..1; PW spans both halves.
+constexpr int VQ_PARAM_IDX[3] = {VocalTract::AES, VocalTract::TT,
+                                  VocalTract::PW};
+constexpr const char* VQ_LABEL[3] = {"AES", "TT", "PW"};
+
 struct TongueSideInset {
   ImVec2 rectMin{}, rectMax{};   // outer panel bounds
   ImVec2 plotMin{}, plotMax{};   // inner plot area (inside padding)
@@ -123,6 +134,97 @@ void drawTongueSideInset(ImDrawList* dl, const TongueSideInset& L,
   dl->AddText(ImVec2(L.plotMin.x, L.plotMax.y + 2.0f), labelCol, "back");
   dl->AddText(ImVec2(L.plotMax.x - 28.0f, L.plotMax.y + 2.0f), labelCol,
               "front");
+}
+
+struct VoiceQualityInset {
+  ImVec2 rectMin{}, rectMax{};
+  ImVec2 plotMin{}, plotMax{};
+  float baselineY = 0.0f;
+  float halfH = 0.0f;
+  ImVec2 handlePx[3]{};
+  bool valid = false;
+};
+
+VoiceQualityInset computeVoiceQualityInset(const ImVec2& canvasMin,
+                                           const ImVec2& canvasMax,
+                                           const double* tractParams) {
+  VoiceQualityInset L{};
+  // Same dimensions as the tongue-side inset for visual symmetry.
+  float w = std::max(160.0f, (canvasMax.x - canvasMin.x) * 0.30f);
+  float h = std::max(90.0f, (canvasMax.y - canvasMin.y) * 0.22f);
+  if (canvasMax.x - canvasMin.x < 200.0f ||
+      canvasMax.y - canvasMin.y < 160.0f) {
+    return L;
+  }
+  const float margin = 8.0f;
+  // Top-right corner: tongue-side lives at bottom-right.
+  L.rectMin = ImVec2(canvasMax.x - margin - w, canvasMin.y + margin);
+  L.rectMax = ImVec2(canvasMax.x - margin, canvasMin.y + margin + h);
+  const float padX = 10.0f, padTop = 18.0f, padBot = 14.0f;
+  L.plotMin = ImVec2(L.rectMin.x + padX, L.rectMin.y + padTop);
+  L.plotMax = ImVec2(L.rectMax.x - padX, L.rectMax.y - padBot);
+  float plotW = L.plotMax.x - L.plotMin.x;
+  float plotH = L.plotMax.y - L.plotMin.y;
+  L.baselineY = (L.plotMin.y + L.plotMax.y) * 0.5f;
+  L.halfH = plotH * 0.5f;
+  for (int i = 0; i < 3; ++i) {
+    float t = (i + 0.5f) / 3.0f;
+    float x = L.plotMin.x + t * plotW;
+    double v = tractParams[VQ_PARAM_IDX[i]];
+    if (v < -1.0) v = -1.0;
+    if (v > 1.0) v = 1.0;
+    L.handlePx[i] = ImVec2(x, L.baselineY - (float)v * L.halfH);
+  }
+  L.valid = true;
+  return L;
+}
+
+void drawVoiceQualityInset(ImDrawList* dl, const VoiceQualityInset& L,
+                           int hoverVQ, int draggingVQ,
+                           const double* tractParams) {
+  // Panel background + border.
+  dl->AddRectFilled(L.rectMin, L.rectMax, IM_COL32(20, 28, 44, 220), 4.0f);
+  dl->AddRect(L.rectMin, L.rectMax, ImGui::GetColorU32(ImGuiCol_Border),
+              4.0f);
+  dl->AddText(ImVec2(L.rectMin.x + 8.0f, L.rectMin.y + 3.0f),
+              ImGui::GetColorU32(ImGuiCol_Text), "Voice quality");
+  // Frame + zero baseline.
+  ImU32 axisCol = IM_COL32(140, 150, 170, 180);
+  ImU32 guideCol = IM_COL32(80, 90, 110, 140);
+  dl->AddLine(ImVec2(L.plotMin.x, L.plotMin.y),
+              ImVec2(L.plotMin.x, L.plotMax.y), guideCol, 1.0f);
+  dl->AddLine(ImVec2(L.plotMin.x, L.plotMin.y),
+              ImVec2(L.plotMax.x, L.plotMin.y), guideCol, 1.0f);
+  dl->AddLine(ImVec2(L.plotMin.x, L.plotMax.y),
+              ImVec2(L.plotMax.x, L.plotMax.y), guideCol, 1.0f);
+  dl->AddLine(ImVec2(L.plotMin.x, L.baselineY),
+              ImVec2(L.plotMax.x, L.baselineY), axisCol, 1.0f);
+  // Handles (no connecting polyline — these aren't a contour).
+  ImU32 dotOutline = ImGui::GetColorU32(ImGuiCol_Text);
+  ImU32 dotIdle = ImGui::GetColorU32(ImGuiCol_FrameBg);
+  for (int i = 0; i < 3; ++i) {
+    bool active = (draggingVQ == i);
+    bool hover = (hoverVQ == i);
+    ImU32 fill = active ? IM_COL32(40, 130, 230, 255)
+                        : hover ? IM_COL32(255, 200, 80, 255)
+                                : dotIdle;
+    dl->AddCircleFilled(L.handlePx[i], 5.0f, fill);
+    dl->AddCircle(L.handlePx[i], 5.0f, dotOutline, 0, 1.5f);
+    // Param-name label below the bottom guide for orientation.
+    dl->AddText(ImVec2(L.handlePx[i].x - 8.0f, L.plotMax.y + 2.0f),
+                IM_COL32(160, 170, 190, 200), VQ_LABEL[i]);
+    if (hover || active) {
+      char tip[64];
+      std::snprintf(tip, sizeof(tip), "%s = %+0.2f", VQ_LABEL[i],
+                    tractParams[VQ_PARAM_IDX[i]]);
+      dl->AddText(ImVec2(L.handlePx[i].x + 8.0f, L.handlePx[i].y - 16.0f),
+                  dotOutline, tip);
+    }
+  }
+  // Axis labels.
+  ImU32 labelCol = IM_COL32(160, 170, 190, 200);
+  dl->AddText(ImVec2(L.plotMin.x - 2.0f, L.plotMin.y - 2.0f), labelCol, "+1");
+  dl->AddText(ImVec2(L.plotMin.x - 2.0f, L.plotMax.y - 12.0f), labelCol, "-1");
 }
 
 // Centerline-based overlay highlighting the voice-quality zones.
@@ -445,6 +547,7 @@ void renderVocalTract2DPanel(VocalTract* tract, double* tractParams,
 
   static int draggingPoint = -1;
   static int draggingTS = -1;
+  static int draggingVQ = -1;
   // Hide the tongue back handle when the synth is computing TRX/TRY for us
   // — dragging it can't change anything, so showing it is misleading.
   auto pointVisible = [&](int kind) {
@@ -454,24 +557,41 @@ void renderVocalTract2DPanel(VocalTract* tract, double* tractParams,
   ImVec2 mousePx = ImGui::GetIO().MousePos;
   const float pickRadius_px = 9.0f;
 
-  // Tongue side inset (bottom-right). Computed first so we can pick its
-  // handles before — and instead of — the main control points: a click
-  // landing inside the inset should never start dragging the tract
-  // outline that happens to live behind it.
+  // Tongue side inset (bottom-right) and voice-quality inset (top-
+  // right). Computed first so we can pick their handles before — and
+  // instead of — the main control points: a click landing inside an
+  // inset must never start dragging the tract outline behind it.
   TongueSideInset tsInset =
       computeTongueSideInset(canvasMin, canvasMax, tractParams);
+  VoiceQualityInset vqInset =
+      computeVoiceQualityInset(canvasMin, canvasMax, tractParams);
+  auto inRect = [](const ImVec2& p, const ImVec2& a, const ImVec2& b) {
+    return p.x >= a.x && p.x <= b.x && p.y >= a.y && p.y <= b.y;
+  };
   bool mouseInInset =
-      tsInset.valid &&
-      mousePx.x >= tsInset.rectMin.x && mousePx.x <= tsInset.rectMax.x &&
-      mousePx.y >= tsInset.rectMin.y && mousePx.y <= tsInset.rectMax.y;
+      (tsInset.valid && inRect(mousePx, tsInset.rectMin, tsInset.rectMax)) ||
+      (vqInset.valid && inRect(mousePx, vqInset.rectMin, vqInset.rectMax));
   int hoverTS = -1;
-  if (tsInset.valid && itemHovered && draggingPoint < 0 && draggingTS < 0) {
-    for (int i = 0; i < 3; ++i) {
-      float dx = tsInset.handlePx[i].x - mousePx.x;
-      float dy = tsInset.handlePx[i].y - mousePx.y;
-      if (dx * dx + dy * dy <= pickRadius_px * pickRadius_px) {
-        hoverTS = i;
-        break;
+  int hoverVQ = -1;
+  if (itemHovered && draggingPoint < 0 && draggingTS < 0 && draggingVQ < 0) {
+    if (tsInset.valid) {
+      for (int i = 0; i < 3; ++i) {
+        float dx = tsInset.handlePx[i].x - mousePx.x;
+        float dy = tsInset.handlePx[i].y - mousePx.y;
+        if (dx * dx + dy * dy <= pickRadius_px * pickRadius_px) {
+          hoverTS = i;
+          break;
+        }
+      }
+    }
+    if (hoverTS < 0 && vqInset.valid) {
+      for (int i = 0; i < 3; ++i) {
+        float dx = vqInset.handlePx[i].x - mousePx.x;
+        float dy = vqInset.handlePx[i].y - mousePx.y;
+        if (dx * dx + dy * dy <= pickRadius_px * pickRadius_px) {
+          hoverVQ = i;
+          break;
+        }
       }
     }
   }
@@ -494,11 +614,13 @@ void renderVocalTract2DPanel(VocalTract* tract, double* tractParams,
 
   if (itemHovered && ImGui::IsMouseClicked(0)) {
     if (hoverTS >= 0) draggingTS = hoverTS;
+    else if (hoverVQ >= 0) draggingVQ = hoverVQ;
     else if (hoverPoint >= 0) draggingPoint = hoverPoint;
   }
   if (!ImGui::IsMouseDown(0)) {
     draggingPoint = -1;
     draggingTS = -1;
+    draggingVQ = -1;
   }
 
   if (draggingTS >= 0 && itemActive && tsInset.valid) {
@@ -516,6 +638,20 @@ void renderVocalTract2DPanel(VocalTract* tract, double* tractParams,
     // Recompute the inset geometry so the dragged handle follows the
     // mouse the same frame.
     tsInset = computeTongueSideInset(canvasMin, canvasMax, tractParams);
+  }
+
+  if (draggingVQ >= 0 && itemActive && vqInset.valid) {
+    // Same mapping as the tongue-side inset. AES and TT are 0..1
+    // (clamped by the per-param min/max), PW is -1..+1.
+    double v = -((double)(mousePx.y - vqInset.baselineY) / vqInset.halfH);
+    int idx = VQ_PARAM_IDX[draggingVQ];
+    const auto& info = tract->params[idx];
+    if (v < info.min) v = info.min;
+    if (v > info.max) v = info.max;
+    tractParams[idx] = v;
+    tract->params[idx].x = v;
+    tract->calculateAll();
+    vqInset = computeVoiceQualityInset(canvasMin, canvasMax, tractParams);
   }
 
   if (draggingPoint >= 0 && itemActive) {
@@ -548,6 +684,9 @@ void renderVocalTract2DPanel(VocalTract* tract, double* tractParams,
   }
   if (tsInset.valid) {
     drawTongueSideInset(dl, tsInset, hoverTS, draggingTS, tractParams);
+  }
+  if (vqInset.valid) {
+    drawVoiceQualityInset(dl, vqInset, hoverVQ, draggingVQ, tractParams);
   }
   dl->AddRect(canvasMin, canvasMax, ImGui::GetColorU32(ImGuiCol_Border));
 
