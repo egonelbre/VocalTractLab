@@ -143,13 +143,14 @@ void renderControlsPanel(AudioEngine& engine, FrameSnapshot& snap) {
     tractSlider(VocalTract::TS2, "2");
     tractSlider(VocalTract::TS3, "3");
 
-    // AES is the aryepiglottic-sphincter / epilarynx narrowing — the
-    // defining gesture of twang. PW is signed pharyngeal width:
-    // negative = constrictor narrowing (Edge / Kulning), positive =
-    // stylopharyngeus dilation ("open throat", Operatic squillo).
-    // The two are independent muscle actions.
+    // AES and PW share a signed convention: negative = contraction,
+    // positive = expansion. AES < 0 is the aryepiglottic-sphincter
+    // contraction that defines twang. PW < 0 is constrictor
+    // narrowing (Edge / Kulning), PW > 0 is stylopharyngeus dilation
+    // ("open throat", Operatic squillo). The two are independent
+    // muscle actions.
     ImGui::SeparatorText("Voice quality (twang & pharynx)");
-    tractSlider(VocalTract::AES, "AES (epilarynx)");
+    tractSlider(VocalTract::AES, "AES epilarynx (-narrow / +wide)");
     tractSlider(VocalTract::PW,  "Pharyngeal width (-narrow / +wide)");
 
     // Thyroid forward tilt — cricothyroid action. Tilts the upper

@@ -171,7 +171,7 @@ void VocalTract::init()
     "  <param index=\"16\" name=\"TS1\"  min=\"0.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"  
     "  <param index=\"17\" name=\"TS2\"  min=\"0.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n" 
     "  <param index=\"18\" name=\"TS3\"  min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
-    "  <param index=\"19\" name=\"AES\"  min=\"0.0\"  max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
+    "  <param index=\"19\" name=\"AES\"  min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "  <param index=\"20\" name=\"PW\"   min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "  <param index=\"21\" name=\"TT\"   min=\"0.0\"  max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "</anatomy>";
@@ -1535,26 +1535,29 @@ void VocalTract::readAnatomyXml(XmlNode *anatomyNode){
       }
       paramRead[m] = true;    // Mark this parameter as read/initialized
 
-      // Detect legacy param names. Stage 1 renamed MCP → AES (same
-      // range, same convention — bounds are still valid). Stage 3
-      // renamed MCO → PW (range changed from [0, 1] to [-1, +1]
-      // with sign flipped) — old min/max bounds would clip the
-      // signed range, so for a legacy MCO declaration we keep the
-      // built-in PW defaults rather than trusting the speaker file.
+      // Detect legacy param names. Stage 1 renamed MCP → AES, Stage
+      // 3 renamed MCO → PW. Both later got a signed [-1, +1] range
+      // with negative = contraction, positive = expansion — old
+      // [0, 1] bounds would clip the signed range, so for a legacy
+      // declaration we keep the built-in defaults and rely on the
+      // shape XML reader to sign-flip stored values.
       string xmlName;
       XmlHelper::readAttribute(node, "name", xmlName);
+      bool legacyMCP = (xmlName == "MCP" && m == AES);
       bool legacyMCO = (xmlName == "MCO" && m == PW);
-      if (xmlName == "MCP" && m == AES) xmlName = "AES";
+      if (legacyMCP) xmlName = "AES";
       if (legacyMCO) xmlName = "PW";
       params[m].abbr = xmlName;
 
-      if (legacyMCO)
+      if (legacyMCP || legacyMCO)
       {
+        const char* legacy = legacyMCP ? "MCP" : "MCO";
+        const char* now    = legacyMCP ? "AES" : "PW";
         fprintf(stderr,
-                "Warning: speaker file uses legacy param name 'MCO' "
-                "at index %d; remapping to PW with built-in [-1,+1] "
+                "Warning: speaker file uses legacy param name '%s' "
+                "at index %d; remapping to %s with built-in [-1,+1] "
                 "range (stored shape values are sign-flipped on "
-                "load).\n", m);
+                "load).\n", legacy, m, now);
       }
       else
       {
@@ -1663,13 +1666,16 @@ void VocalTract::readShapesXml(XmlNode *shapeListNode){
       paramName = paramNode->getAttributeString("name");
 
       // Backward-compat aliases for renamed params. Stage 1 renamed
-      // MCP → AES (same convention, no value transform). Stage 3
-      // renamed MCO → PW with a sign flip: old MCO ∈ [0, 1] with
-      // 1 = full narrowing maps to PW = -1. Old shape files / third-
-      // party shapes that still reference the legacy names load as
-      // the new equivalents.
+      // MCP → AES; the AES sign was later flipped to match PW so
+      // both contractions are negative — old MCP ∈ [0, 1] with
+      // 1 = full contraction maps to AES = -1. MCO → PW had the
+      // same sign flip from day one. Both are negated on load.
       double valueScale = 1.0;
-      if (paramName == "MCP") paramName = "AES";
+      if (paramName == "MCP")
+      {
+        paramName = "AES";
+        valueScale = -1.0;
+      }
       if (paramName == "MCO")
       {
         paramName = "PW";
@@ -5674,38 +5680,41 @@ void VocalTract::calcCrossSections()
   // Apply supraglottal voice-quality deformations — based on Estill,
   // CVT, and MRI/CT studies (Yanagi 2024, Mainka 2015,
   // Höglund/Lindblad/Sundberg 2024). Two independent gestures act
-  // along the centerline:
+  // along the centerline. Both use the same signed convention:
+  // negative = contraction, positive = expansion.
   //
-  //   AES — aryepiglottic-sphincter / epilaryngeal-tube narrowing,
-  //         the defining gesture of twang. Range 0..1. Acts on the
-  //         first ~3 cm above the glottis (Sundberg-style epilarynx
-  //         tube). MRI area reductions 11.8%–52.4% (Yanagi); we map
-  //         the parameter to a 50% max area reduction.
-  //   PW  — pharyngeal width, *signed* range -1..+1. Negative =
+  //   AES — aryepiglottic-sphincter / epilaryngeal-tube width,
+  //         signed range -1..+1. AES = -1 is full contraction (the
+  //         defining gesture of twang); AES = +1 is full expansion
+  //         (relaxed / wide epilarynx). Acts on the first ~3 cm
+  //         above the glottis. MRI area reductions 11.8%–52.4%
+  //         (Yanagi); we map AES = ±1 to ±50% area at the centre
+  //         of the Hann window.
+  //   PW  — pharyngeal width, signed range -1..+1. Negative =
   //         hypopharyngeal narrowing (Edge / Kulning, constrictor
   //         engagement). Positive = stylopharyngeus dilation
   //         (Operatic squillo, "open throat"). Acts between the
   //         AES boundary and the velopharyngeal port. Calibrated to
   //         ±50% hypopharyngeal area at PW=±1, against
   //         Höglund/Lindblad/Sundberg's measured Aph values.
-  //         (PW=-1 reproduces the old MCO=1 behaviour exactly,
-  //         which is why the sign convention is flipped relative
-  //         to the legacy MCO.)
   //
   // A Hann window over each region tapers the effect to zero at
   // the glottis, the AES/oropharynx boundary, and the velar port,
   // so adjacent stages don't fight each other.
   // ****************************************************************
 
-  double aesFactor = medialCompressionParamToFactor(params[AES].x);
-  // Signed PW factor: PW=-1 → 0.5 (full narrow, matches legacy
-  // MCO=1), PW=0 → 1.0 (no change), PW=+1 → 1.5 (full widen).
+  // Signed AES / PW factors: -1 → 0.5 (full contraction), 0 → 1.0
+  // (neutral), +1 → 1.5 (full expansion).
+  double aesParam = params[AES].x;
+  if (aesParam < -1.0) aesParam = -1.0;
+  if (aesParam >  1.0) aesParam =  1.0;
+  double aesFactor = 1.0 + 0.5 * aesParam;
   double pwParam = params[PW].x;
   if (pwParam < -1.0) pwParam = -1.0;
   if (pwParam >  1.0) pwParam =  1.0;
   double pwFactor = 1.0 + 0.5 * pwParam;
 
-  if ((aesFactor < 1.0) || (pwFactor != 1.0))
+  if ((aesFactor != 1.0) || (pwFactor != 1.0))
   {
     // ~3 cm epilarynx length matches Sundberg's measurement of the
     // narrowed epilaryngeal tube length contributing to the singer's
@@ -5720,12 +5729,12 @@ void VocalTract::calcCrossSections()
     bool aesValid = aesEnd_cm > aesStart_cm + EPSILON;
     bool oroValid = oroEnd_cm > oroStart_cm + EPSILON;
 
-    // Combined region factor: AES contribution (scalar < 1.0 only,
-    // since AES is unsigned) × PW contribution (signed: < 1 for
-    // narrowing, > 1 for widening).
+    // Combined region factor: signed AES + signed PW. Each
+    // contribution is < 1.0 for contraction, > 1.0 for expansion;
+    // the Hann window tapers each effect across its region.
     auto regionFactor = [&](double pos) {
       double factor = 1.0;
-      if (aesValid && (aesFactor < 1.0) &&
+      if (aesValid && (aesFactor != 1.0) &&
           (pos > aesStart_cm) && (pos < aesEnd_cm))
       {
         double t = (pos - aesStart_cm) / (aesEnd_cm - aesStart_cm);
@@ -7858,13 +7867,17 @@ void VocalTract::getTube(Tube *tube)
   // of twang. The length is left unchanged: the anti-resonance
   // frequency is set by length, and we want it to remain in the
   // F3–F5 region rather than shifting elsewhere.
-  // Sub-block: aesPiriform — passive coupling, AES-strength only.
-  double aes = params[AES].x;
-  if (aes < 0.0) aes = 0.0;
-  if (aes > 1.0) aes = 1.0;
+  // Sub-block: aesPiriform — passive coupling, contraction only.
+  // AES is signed (negative = contraction). The piriform fossa
+  // shrinks when the AES contracts (the sphincter pulls the lateral
+  // walls inward); AES > 0 (relaxed / wide epilarynx) doesn't make
+  // the piriform balloon outward, so positive values clamp to 0.
+  double aesContraction = -params[AES].x;
+  if (aesContraction < 0.0) aesContraction = 0.0;
+  if (aesContraction > 1.0) aesContraction = 1.0;
   const double MAX_PIRIFORM_VOLUME_REDUCTION = 0.5;
   double pfVolume_cm3 = anatomy.piriformFossaVolume_cm3 *
-                        (1.0 - MAX_PIRIFORM_VOLUME_REDUCTION * aes);
+                        (1.0 - MAX_PIRIFORM_VOLUME_REDUCTION * aesContraction);
 
   tube->initStaticSections(
     anatomy.subglottalCavityLength_cm,

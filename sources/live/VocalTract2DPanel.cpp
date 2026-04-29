@@ -227,18 +227,45 @@ void drawVoiceQualityInset(ImDrawList* dl, const VoiceQualityInset& L,
   dl->AddText(ImVec2(L.plotMin.x - 2.0f, L.plotMax.y - 12.0f), labelCol, "-1");
 }
 
+// Draws a small filled arrow from `from` to `to`. Used by the
+// voice-quality overlay to indicate radial contraction (head pointing
+// toward the centerline) or expansion (head pointing outward). The
+// triangular head is auto-sized based on the line length so very
+// short arrows don't get a disproportionate head.
+void drawSmallArrow(ImDrawList* dl, ImVec2 from, ImVec2 to, ImU32 col,
+                    float thickness) {
+  ImVec2 d{to.x - from.x, to.y - from.y};
+  float len = std::sqrt(d.x * d.x + d.y * d.y);
+  if (len < 1.0f) return;
+  d.x /= len;
+  d.y /= len;
+  ImVec2 perp{-d.y, d.x};
+  float headLen = std::min(7.0f, len * 0.55f);
+  float headW = headLen * 0.55f;
+  ImVec2 base{to.x - d.x * headLen, to.y - d.y * headLen};
+  ImVec2 left{base.x + perp.x * headW, base.y + perp.y * headW};
+  ImVec2 right{base.x - perp.x * headW, base.y - perp.y * headW};
+  dl->AddLine(from, base, col, thickness);
+  dl->AddTriangleFilled(to, left, right, col);
+}
+
 // Centerline-based overlay highlighting the voice-quality zones.
-// Regions match VocalTract::calcCrossSections exactly so the on-screen
-// markers line up with the acoustics:
-//   AES (warm amber): epilaryngeal tube, ~0.5 to 3.0 cm above the glottis.
-//   PW < 0 (cyan): pharyngeal narrowing (constrictor engagement).
-//   PW > 0 (mint green): pharyngeal widening (stylopharyngeus dilation).
-// The oral cavity is intentionally not shaded.
+// AES and PW share the same signed convention (negative = contraction,
+// positive = expansion), so arrow direction reads consistently
+// across both regions:
+//   inward arrows (head pointing at the centerline) = contraction.
+//   outward arrows = expansion.
+// Region colours stay distinct so it's still obvious which gesture
+// is acting:
+//   AES (warm amber): epilarynx, ~0.5 to 3.0 cm above the glottis.
+//   PW contraction (cyan), PW expansion (mint green).
+// Arrow length scales with local intensity (Hann-weighted parameter
+// magnitude). Sparse sampling keeps the overlay readable.
 void drawMedialCompressionOverlay(ImDrawList* dl, VocalTract* tract,
                                   const TractView& view) {
   double aesParam = tract->params[VocalTract::AES].x;
   double pwParam  = tract->params[VocalTract::PW].x;
-  if (aesParam <= 0.0 && pwParam == 0.0) return;
+  if (aesParam == 0.0 && pwParam == 0.0) return;
 
   const double END_MARGIN_CM = 0.5;
   const double AES_END_CM = 3.0;
@@ -248,41 +275,91 @@ void drawMedialCompressionOverlay(ImDrawList* dl, VocalTract* tract,
   double oroStart = AES_END_CM;
   double oroEnd = nasalPos - END_MARGIN_CM;
 
+  // Visual scaling. Min and max arrow lengths picked so that a small
+  // perturbation (intensity ≈ 0.1) still leaves a visible nub and a
+  // full-strength gesture (intensity = 1.0) reaches well past the
+  // surface. Sized 1.25× the original calibration after live testing.
+  const float MIN_ARROW_PX = 5.0f;
+  const float MAX_ARROW_PX = 22.5f;
+  // Outset moves the arrow tail / head away from the centerline so
+  // the arrows don't collide with the tract outline at small
+  // intensities.
+  const float OUTLINE_OFFSET_PX = 6.0f;
+
   int N = VocalTract::NUM_CENTERLINE_POINTS;
-  for (int i = 0; i < N; ++i) {
+  // Sample every 6th centerline point — N=129, so ~20 samples across
+  // the full tract; only a handful sit inside any given region.
+  const int STEP = 6;
+  for (int i = 0; i < N; i += STEP) {
     double pos = tract->centerLine[i].pos;
     Point2D P = tract->centerLine[i].point;
+    Point2D nrm = tract->centerLine[i].normal;
 
+    // Signed Hann-weighted intensities. Negative = contraction,
+    // positive = expansion (matching the param convention).
     double aes = 0.0;
-    if (aesParam > 0.0 && pos > aesStart && pos < aesEnd) {
+    if (aesParam != 0.0 && pos > aesStart && pos < aesEnd) {
       double t = (pos - aesStart) / (aesEnd - aesStart);
       aes = aesParam * (0.5 - 0.5 * std::cos(t * 2.0 * M_PI));
     }
-    // Signed PW intensity: positive means widening, negative narrowing.
     double pw = 0.0;
     if (pwParam != 0.0 && pos > oroStart && pos < oroEnd) {
       double t = (pos - oroStart) / (oroEnd - oroStart);
       pw = pwParam * (0.5 - 0.5 * std::cos(t * 2.0 * M_PI));
     }
-    double pwAbs = pw < 0.0 ? -pw : pw;
+    double aesAbs = aes < 0.0 ? -aes : aes;
+    double pwAbs  = pw  < 0.0 ? -pw  : pw;
 
-    double weight = aes > pwAbs ? aes : pwAbs;
-    if (weight < 0.02) continue;
-    int alpha = (int)(weight * 200.0);
-    if (alpha > 200) alpha = 200;
+    double intensity = (aesAbs > pwAbs) ? aesAbs : pwAbs;
+    if (intensity < 0.05) continue;
+
+    bool isExpansion;
     ImU32 col;
-    if (aes >= pwAbs) {
-      // AES — warm amber.
-      col = IM_COL32(255, 150, 60, alpha);
+    if (aesAbs >= pwAbs) {
+      // AES region — colour is always amber; direction follows sign.
+      isExpansion = (aes > 0.0);
+      col = IM_COL32(255, 170, 70, 230);
     } else if (pw < 0.0) {
-      // PW narrowing — cyan.
-      col = IM_COL32(80, 200, 220, alpha);
+      // PW narrowing.
+      isExpansion = false;
+      col = IM_COL32(70, 200, 230, 230);
     } else {
-      // PW widening — mint green.
-      col = IM_COL32(120, 220, 140, alpha);
+      // PW widening.
+      isExpansion = true;
+      col = IM_COL32(120, 220, 140, 230);
     }
+
+    // Screen positions: centerline point + a step along the normal in
+    // model space, transformed independently so the perpendicular is
+    // accurate after the view's uniform y-flip.
     ImVec2 sp = view.toScreen(P.x, P.y);
-    dl->AddCircleFilled(sp, 3.0f + 2.0f * (float)weight, col);
+    ImVec2 spN = view.toScreen(P.x + nrm.x, P.y + nrm.y);
+    ImVec2 perp{spN.x - sp.x, spN.y - sp.y};
+    float plen = std::sqrt(perp.x * perp.x + perp.y * perp.y);
+    if (plen < 0.5f) continue;
+    perp.x /= plen;
+    perp.y /= plen;
+
+    float arrowPx =
+        MIN_ARROW_PX + (MAX_ARROW_PX - MIN_ARROW_PX) * (float)intensity;
+    float thickness = 1.75f + 1.5f * (float)intensity;
+
+    // Draw a pair of arrows, one on each side of the centerline.
+    // Contraction: tail outside, head at the centerline (with a small
+    // gap so the arrowheads don't collide).
+    // Expansion: tail at the centerline (small gap), head outside.
+    for (int side = 0; side < 2; ++side) {
+      float sign = (side == 0) ? 1.0f : -1.0f;
+      ImVec2 inner{sp.x + sign * perp.x * OUTLINE_OFFSET_PX,
+                   sp.y + sign * perp.y * OUTLINE_OFFSET_PX};
+      ImVec2 outer{sp.x + sign * perp.x * (OUTLINE_OFFSET_PX + arrowPx),
+                   sp.y + sign * perp.y * (OUTLINE_OFFSET_PX + arrowPx)};
+      if (isExpansion) {
+        drawSmallArrow(dl, inner, outer, col, thickness);
+      } else {
+        drawSmallArrow(dl, outer, inner, col, thickness);
+      }
+    }
   }
 }
 
