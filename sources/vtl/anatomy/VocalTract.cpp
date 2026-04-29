@@ -5800,8 +5800,17 @@ void VocalTract::calcCrossSections()
     // ============================================================
     if (pwFactor != 1.0)
     {
-      const double MAX_TONGUE_BACK_SHIFT_CM = 0.6;
+      // Asymmetric magnitude: narrowing (PW < 0) gets the full
+      // 6 mm shift (legacy behaviour). Widening (PW > 0) is capped
+      // at 3 mm to avoid pushing the tongue-back ribs past the
+      // tongue body — Stage 4 soft clamp. The tongue body itself
+      // doesn't follow the root in this implementation; cleaner
+      // would be to add a TRX/TCX target offset in the auto-
+      // tongue-root path, but that's a separate refactor.
+      const double MAX_TONGUE_RETRACT_CM = 0.6;  // PW < 0
+      const double MAX_TONGUE_ADVANCE_CM = 0.3;  // PW > 0
       Surface* tongueSurf = &surfaces[TONGUE];
+      double tongueBodyX = params[TCX].limitedX;
       for (int r = 1; r < NUM_DYNAMIC_TONGUE_RIBS; r++)
       {
         double pos = getCenterLinePos(tongueRib[r].point, ribClIndex, ribClT);
@@ -5811,8 +5820,26 @@ void VocalTract::calcCrossSections()
           // Signed delta: narrowing (factor < 1) → +delta along
           // normal (push backward); widening (factor > 1) →
           // -delta (push forward).
-          double delta = MAX_TONGUE_BACK_SHIFT_CM * (1.0 - factor) / FULL_REDUCTION;
+          double maxShift = (factor < 1.0) ? MAX_TONGUE_RETRACT_CM
+                                           : MAX_TONGUE_ADVANCE_CM;
+          double delta = maxShift * (1.0 - factor) / FULL_REDUCTION;
           Point2D n = tongueRib[r].normal;
+          // Per-rib advance clamp: don't let the rib's centerline
+          // x cross past the tongue body centre (with a 5 mm
+          // safety margin), so widening doesn't drag the back-of-
+          // tongue surface through the body.
+          if (delta < 0.0)
+          {
+            const double SAFETY_CM = 0.5;
+            double centerlineDX = n.x * delta;
+            double maxAdvance =
+                tongueBodyX - tongueRib[r].point.x - SAFETY_CM;
+            if (maxAdvance < 0.0) maxAdvance = 0.0;
+            if (centerlineDX > maxAdvance && n.x != 0.0)
+            {
+              delta = maxAdvance / n.x;  // n.x < 0, maxAdvance ≥ 0
+            }
+          }
           for (int k = 0; k < tongueSurf->numRibPoints; k++)
           {
             Point3D v = tongueSurf->getVertex(r, k);
@@ -5899,6 +5926,15 @@ void VocalTract::calcCrossSections()
       // PW < 0: push the back wall toward +x (narrow). PW > 0: push
       // toward -x (widen). Skip larynx ribs (TT owns that region's
       // AP gesture).
+      //
+      // Stage 4 soft clamp: getPharynxBackX(y) is the anatomical
+      // position of the cervical-spine-bounded back wall. For
+      // widening (apShift < 0) we don't allow a vertex to move
+      // past that limit — physically the spine constrains the
+      // pharynx, so widening manifests primarily through the front
+      // wall (tongue root, already deformed in pwTongueRoot).
+      // Narrowing (apShift > 0) is unconstrained from this side
+      // because the wall is moving *away* from the spine.
       if (pwFactor != 1.0)
       {
         Surface* uc = &surfaces[UPPER_COVER];
@@ -5922,7 +5958,13 @@ void VocalTract::calcCrossSections()
           for (int k = 0; k < uc->numRibPoints; k++)
           {
             Point3D v = uc->getVertex(ri, k);
-            uc->setVertex(ri, k, v.x + apShift, v.y, v.z);
+            double newX = v.x + apShift;
+            if (apShift < 0.0)
+            {
+              double minX = getPharynxBackX(v.y);
+              if (newX < minX) newX = minX;
+            }
+            uc->setVertex(ri, k, newX, v.y, v.z);
           }
           if (ucTw != nullptr)
           {
