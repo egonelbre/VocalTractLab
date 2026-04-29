@@ -125,19 +125,18 @@ void drawTongueSideInset(ImDrawList* dl, const TongueSideInset& L,
               "front");
 }
 
-// Centerline-based overlay highlighting the two narrowing zones used by
-// the twang implementation. Regions match VocalTract::calcCrossSections
-// exactly so the on-screen markers line up with the acoustics:
+// Centerline-based overlay highlighting the voice-quality zones.
+// Regions match VocalTract::calcCrossSections exactly so the on-screen
+// markers line up with the acoustics:
 //   AES (warm amber): epilaryngeal tube, ~0.5 to 3.0 cm above the glottis.
-//   Oropharynx (cyan): from the AES boundary up to the velopharyngeal port.
-// The oral cavity is intentionally not shaded — twang widens the mouth, it
-// doesn't compress it. (Stage 3 will give MCO a signed PW range; the
-// overlay will then split into a separate widening colour for PW > 0.)
+//   PW < 0 (cyan): pharyngeal narrowing (constrictor engagement).
+//   PW > 0 (mint green): pharyngeal widening (stylopharyngeus dilation).
+// The oral cavity is intentionally not shaded.
 void drawMedialCompressionOverlay(ImDrawList* dl, VocalTract* tract,
                                   const TractView& view) {
   double aesParam = tract->params[VocalTract::AES].x;
-  double mcoParam = tract->params[VocalTract::MCO].x;
-  if (aesParam <= 0.0 && mcoParam <= 0.0) return;
+  double pwParam  = tract->params[VocalTract::PW].x;
+  if (aesParam <= 0.0 && pwParam == 0.0) return;
 
   const double END_MARGIN_CM = 0.5;
   const double AES_END_CM = 3.0;
@@ -157,19 +156,29 @@ void drawMedialCompressionOverlay(ImDrawList* dl, VocalTract* tract,
       double t = (pos - aesStart) / (aesEnd - aesStart);
       aes = aesParam * (0.5 - 0.5 * std::cos(t * 2.0 * M_PI));
     }
-    double oro = 0.0;
-    if (mcoParam > 0.0 && pos > oroStart && pos < oroEnd) {
+    // Signed PW intensity: positive means widening, negative narrowing.
+    double pw = 0.0;
+    if (pwParam != 0.0 && pos > oroStart && pos < oroEnd) {
       double t = (pos - oroStart) / (oroEnd - oroStart);
-      oro = mcoParam * (0.5 - 0.5 * std::cos(t * 2.0 * M_PI));
+      pw = pwParam * (0.5 - 0.5 * std::cos(t * 2.0 * M_PI));
     }
+    double pwAbs = pw < 0.0 ? -pw : pw;
 
-    double weight = aes > oro ? aes : oro;
+    double weight = aes > pwAbs ? aes : pwAbs;
     if (weight < 0.02) continue;
     int alpha = (int)(weight * 200.0);
     if (alpha > 200) alpha = 200;
-    ImU32 col = (aes >= oro)
-                    ? IM_COL32(255, 150, 60, alpha)
-                    : IM_COL32(80, 200, 220, alpha);
+    ImU32 col;
+    if (aes >= pwAbs) {
+      // AES — warm amber.
+      col = IM_COL32(255, 150, 60, alpha);
+    } else if (pw < 0.0) {
+      // PW narrowing — cyan.
+      col = IM_COL32(80, 200, 220, alpha);
+    } else {
+      // PW widening — mint green.
+      col = IM_COL32(120, 220, 140, alpha);
+    }
     ImVec2 sp = view.toScreen(P.x, P.y);
     dl->AddCircleFilled(sp, 3.0f + 2.0f * (float)weight, col);
   }

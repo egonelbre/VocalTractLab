@@ -144,13 +144,13 @@ void renderControlsPanel(AudioEngine& engine, FrameSnapshot& snap) {
     tractSlider(VocalTract::TS3, "3");
 
     // AES is the aryepiglottic-sphincter / epilarynx narrowing — the
-    // defining gesture of twang. MCO is hypopharyngeal narrowing
-    // (megaphone). They are independent muscle actions; the section
-    // header reflects that. Stage 3 will replace MCO with a signed
-    // PW (pharyngeal width) that also widens.
-    ImGui::SeparatorText("AES (twang) & oropharyngeal narrowing");
+    // defining gesture of twang. PW is signed pharyngeal width:
+    // negative = constrictor narrowing (Edge / Kulning), positive =
+    // stylopharyngeus dilation ("open throat", Operatic squillo).
+    // The two are independent muscle actions.
+    ImGui::SeparatorText("Voice quality (twang & pharynx)");
     tractSlider(VocalTract::AES, "AES (epilarynx)");
-    tractSlider(VocalTract::MCO, "Oropharynx (megaphone)");
+    tractSlider(VocalTract::PW,  "Pharyngeal width (-narrow / +wide)");
 
     // Thyroid forward tilt — cricothyroid action. Tilts the upper
     // epiglottis backward toward the arytenoids. Independent of AES;
