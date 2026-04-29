@@ -164,7 +164,7 @@ public:
     TCX, TCY, TTX, TTY,
     TBX, TBY, TRX, TRY,
     TS1, TS2, TS3,
-    MCP, MCO,
+    AES, MCO,
     NUM_PARAMS
   };
 

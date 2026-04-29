@@ -143,9 +143,14 @@ void renderControlsPanel(AudioEngine& engine, FrameSnapshot& snap) {
     tractSlider(VocalTract::TS2, "2");
     tractSlider(VocalTract::TS3, "3");
 
-    ImGui::SeparatorText("Twang / medial compression");
-    tractSlider(VocalTract::MCP, "AES (epilarynx)");
-    tractSlider(VocalTract::MCO, "Oropharynx");
+    // AES is the aryepiglottic-sphincter / epilarynx narrowing — the
+    // defining gesture of twang. MCO is hypopharyngeal narrowing
+    // (megaphone). They are independent muscle actions; the section
+    // header reflects that. Stage 3 will replace MCO with a signed
+    // PW (pharyngeal width) that also widens.
+    ImGui::SeparatorText("AES (twang) & oropharyngeal narrowing");
+    tractSlider(VocalTract::AES, "AES (epilarynx)");
+    tractSlider(VocalTract::MCO, "Oropharynx (megaphone)");
 
     ImGui::PopItemWidth();
   }

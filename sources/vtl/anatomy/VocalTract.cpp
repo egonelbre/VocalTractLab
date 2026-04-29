@@ -171,7 +171,7 @@ void VocalTract::init()
     "  <param index=\"16\" name=\"TS1\"  min=\"0.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"  
     "  <param index=\"17\" name=\"TS2\"  min=\"0.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n" 
     "  <param index=\"18\" name=\"TS3\"  min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
-    "  <param index=\"19\" name=\"MCP\"  min=\"0.0\"  max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
+    "  <param index=\"19\" name=\"AES\"  min=\"0.0\"  max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "  <param index=\"20\" name=\"MCO\"  min=\"0.0\"  max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "</anatomy>";
 
@@ -220,7 +220,7 @@ void VocalTract::init()
   params[TS1].name = "Tongue side elevation 1";
   params[TS2].name = "Tongue side elevation 2";
   params[TS3].name = "Tongue side elevation 3";
-  params[MCP].name = "AES / epilaryngeal narrowing (twang)";
+  params[AES].name = "AES / epilaryngeal narrowing (twang)";
   params[MCO].name = "Oropharyngeal narrowing";
 
 
@@ -1631,12 +1631,20 @@ void VocalTract::readShapesXml(XmlNode *shapeListNode){
       paramNode = shapeNode->getChildElement("param", k);
       paramName = paramNode->getAttributeString("name");
 
+      // Backward-compat aliases for renamed params. Stage 1 renamed
+      // MCP → AES; Stage 3 will rename MCO → PW (with a sign flip
+      // applied separately at that layer). Old shape files / third-
+      // party shapes that still reference the legacy names should
+      // load as their new equivalents instead of being silently
+      // dropped.
+      if (paramName == "MCP") paramName = "AES";
+
       n = -1;
       for (m=0; (m < NUM_PARAMS) && (n == -1); m++)
       {
-        if (paramName == params[m].abbr) 
-        { 
-          n = m; 
+        if (paramName == params[m].abbr)
+        {
+          n = m;
         }
       }
       if (n != -1)
@@ -5630,26 +5638,32 @@ void VocalTract::calcCrossSections()
   // on twang voice quality. Two independent stages of supraglottal
   // narrowing along the centerline:
   //
-  //   MCP — aryepiglottic-sphincter (AES) / epilaryngeal-tube
-  //         narrowing, the defining gesture of twang. Acts on the
-  //         first ~3 cm above the glottis (Sundberg-style epilarynx
-  //         tube). Reported MRI area reductions are 11.8%–52.4%
-  //         (Yanagi et al.); we map the parameter to a 70%
-  //         max area reduction at the centre of the window.
+  //   AES — aryepiglottic-sphincter / epilaryngeal-tube narrowing,
+  //         the defining gesture of twang. Acts on the first ~3 cm
+  //         above the glottis (Sundberg-style epilarynx tube).
+  //         Reported MRI area reductions are 11.8%–52.4% (Yanagi
+  //         et al.); we map the parameter to a 70% max area
+  //         reduction at the centre of the window.
   //   MCO — oropharyngeal narrowing, the secondary "megaphone"
   //         component of twang. Acts between the AES and the
   //         velopharyngeal port. The oral cavity itself widens in
-  //         twang, so MCO does NOT touch the mouth.
+  //         twang, so MCO does NOT touch the mouth. (Stage 3 will
+  //         replace this with a signed PW that also widens.)
   //
   // A Hann window over each region tapers the effect to zero at
   // the glottis, the AES/oropharynx boundary, and the velar port,
   // so adjacent stages don't fight each other.
+  //
+  // Effects are organised into named sub-blocks to make Stage 2
+  // (move the AES epiglottis-AP shift onto a new TT param) and
+  // Stage 3 (split MCO into signed PW with widening direction)
+  // cleanly localised.
   // ****************************************************************
 
-  double mcpFactor = medialCompressionParamToFactor(params[MCP].x);
+  double aesFactor = medialCompressionParamToFactor(params[AES].x);
   double mcoFactor = medialCompressionParamToFactor(params[MCO].x);
 
-  if ((mcpFactor < 1.0) || (mcoFactor < 1.0))
+  if ((aesFactor < 1.0) || (mcoFactor < 1.0))
   {
     // ~3 cm epilarynx length matches Sundberg's measurement of the
     // narrowed epilaryngeal tube length contributing to the singer's
@@ -5666,12 +5680,12 @@ void VocalTract::calcCrossSections()
 
     auto regionFactor = [&](double pos) {
       double factor = 1.0;
-      if (aesValid && (mcpFactor < 1.0) &&
+      if (aesValid && (aesFactor < 1.0) &&
           (pos > aesStart_cm) && (pos < aesEnd_cm))
       {
         double t = (pos - aesStart_cm) / (aesEnd_cm - aesStart_cm);
         double window = 0.5 - 0.5 * cos(t * 2.0 * M_PI);
-        factor *= 1.0 - (1.0 - mcpFactor) * window;
+        factor *= 1.0 - (1.0 - aesFactor) * window;
       }
       if (oroValid && (mcoFactor < 1.0) &&
           (pos > oroStart_cm) && (pos < oroEnd_cm))
@@ -5683,7 +5697,12 @@ void VocalTract::calcCrossSections()
       return factor;
     };
 
-    // Acoustic effect: scale cross-section area + circumference.
+    // ============================================================
+    // Sub-block: aesArea + mcoArea
+    // Acoustic effect: scale cross-section area + circumference
+    // along both windows. regionFactor combines AES and MCO
+    // contributions so a single pass is enough.
+    // ============================================================
     for (i = 0; i < NUM_CENTERLINE_POINTS; i++)
     {
       double factor = regionFactor(crossSection[i].pos);
@@ -5701,11 +5720,17 @@ void VocalTract::calcCrossSections()
     int   ribClIndex;
     double ribClT;
 
-    // (1) AES — the aryepiglottic folds and epiglottic base move
-    // posteriorly. We slide the EPIGLOTTIS surface in the -x
-    // direction (toward the back wall) by an amount derived from
-    // the AES factor at the surface's anchor point.
-    if (mcpFactor < 1.0)
+    // ============================================================
+    // Sub-block: aesEpiglottisAP
+    // The aryepiglottic folds and epiglottic base move posteriorly.
+    // We slide the EPIGLOTTIS surface in the -x direction (toward
+    // the back wall) by an amount derived from the AES factor at
+    // the surface's anchor point. (Stage 2 will move this gesture
+    // onto a new TT — thyroid forward tilt — param, since the
+    // backward-tilting epiglottis is physiologically a CT/thyroid-
+    // tilt action rather than the AES sphincter itself.)
+    // ============================================================
+    if (aesFactor < 1.0)
     {
       Surface* eg = &surfaces[EPIGLOTTIS];
       Point2D anchor = eg->getVertex(0, eg->numRibPoints / 2).toPoint2D();
@@ -5715,13 +5740,13 @@ void VocalTract::calcCrossSections()
       {
         double t = (pos - aesStart_cm) / (aesEnd_cm - aesStart_cm);
         double window = 0.5 - 0.5 * cos(t * 2.0 * M_PI);
-        factor = 1.0 - (1.0 - mcpFactor) * window;
+        factor = 1.0 - (1.0 - aesFactor) * window;
       }
       else if (pos <= aesStart_cm)
       {
         // Anchor sits below the AES window — apply the centre-of-window
-        // strength so the user still sees the AES respond to MCP.
-        factor = mcpFactor;
+        // strength so the user still sees the AES respond to the param.
+        factor = aesFactor;
       }
       if (factor < 1.0)
       {
@@ -5752,12 +5777,16 @@ void VocalTract::calcCrossSections()
       }
     }
 
-    // (2) Oropharynx — the tongue root moves posteriorly toward the
-    // back pharyngeal wall. The dynamic tongue ribs in sector 0
-    // (the back-of-tongue arc) have a normal pointing in -x; pushing
-    // the rib's vertices along that normal narrows the oropharynx
-    // without lifting the tongue body toward the palate (which is a
-    // vowel articulation, not a twang gesture).
+    // ============================================================
+    // Sub-block: mcoTongueRoot
+    // The tongue root moves posteriorly toward the back pharyngeal
+    // wall. The dynamic tongue ribs in sector 0 (the back-of-tongue
+    // arc) have a normal pointing in -x; pushing the rib's vertices
+    // along that normal narrows the oropharynx without lifting the
+    // tongue body toward the palate (which is a vowel articulation,
+    // not a twang gesture). Stage 3 will move this onto a soft TRX
+    // target so the tongue-root knob retains ownership.
+    // ============================================================
     if (mcoFactor < 1.0)
     {
       const double MAX_TONGUE_BACK_SHIFT_CM = 0.6;
@@ -5786,16 +5815,21 @@ void VocalTract::calcCrossSections()
       }
     }
 
-    // (3) Mediolateral component — Yanagi et al. (2024) and
-    // Honda et al. (2023) report twang uses combined AP + ML
-    // narrowing. ML pulls the side walls of the larynx and
-    // pharynx toward the midline. We implement this by scaling
-    // the z (lateral) coordinate of vertices on the cover and
-    // epiglottis surfaces in the AES / oropharynx regions, then
-    // re-mirror onto the _TWOSIDE meshes used by 3D rendering.
-    // The scale factor maps a parameter strength of 0..1 onto a
-    // 0..50% lateral pull-in at the centre of each region's
-    // Hann window, tapering to 1.0 at the boundaries.
+    // ============================================================
+    // Sub-block: mediolateralPinch
+    // Yanagi et al. (2024) and Honda et al. (2023) report twang
+    // uses combined AP + ML narrowing. ML pulls the side walls of
+    // the larynx and pharynx toward the midline. We implement this
+    // by scaling the z (lateral) coordinate of vertices on the
+    // cover and epiglottis surfaces in the AES / oropharynx
+    // regions, then re-mirror onto the _TWOSIDE meshes used by 3D
+    // rendering. The scale factor maps a parameter strength of
+    // 0..1 onto a 0..50% lateral pull-in at the centre of each
+    // region's Hann window, tapering to 1.0 at the boundaries.
+    // Note: invisible in the 2D mediosagittal slice — Stage 3 adds
+    // an AP component on UPPER_COVER ribs so PW > 0 widening shows
+    // up in the outline view.
+    // ============================================================
     {
       const double MAX_ML_SHRINK = 0.50;
 
@@ -7669,12 +7703,13 @@ void VocalTract::getTube(Tube *tube)
   // of twang. The length is left unchanged: the anti-resonance
   // frequency is set by length, and we want it to remain in the
   // F3–F5 region rather than shifting elsewhere.
-  double mcp = params[MCP].x;
-  if (mcp < 0.0) mcp = 0.0;
-  if (mcp > 1.0) mcp = 1.0;
+  // Sub-block: aesPiriform — passive coupling, AES-strength only.
+  double aes = params[AES].x;
+  if (aes < 0.0) aes = 0.0;
+  if (aes > 1.0) aes = 1.0;
   const double MAX_PIRIFORM_VOLUME_REDUCTION = 0.5;
   double pfVolume_cm3 = anatomy.piriformFossaVolume_cm3 *
-                        (1.0 - MAX_PIRIFORM_VOLUME_REDUCTION * mcp);
+                        (1.0 - MAX_PIRIFORM_VOLUME_REDUCTION * aes);
 
   tube->initStaticSections(
     anatomy.subglottalCavityLength_cm,

@@ -131,12 +131,13 @@ void drawTongueSideInset(ImDrawList* dl, const TongueSideInset& L,
 //   AES (warm amber): epilaryngeal tube, ~0.5 to 3.0 cm above the glottis.
 //   Oropharynx (cyan): from the AES boundary up to the velopharyngeal port.
 // The oral cavity is intentionally not shaded — twang widens the mouth, it
-// doesn't compress it.
+// doesn't compress it. (Stage 3 will give MCO a signed PW range; the
+// overlay will then split into a separate widening colour for PW > 0.)
 void drawMedialCompressionOverlay(ImDrawList* dl, VocalTract* tract,
                                   const TractView& view) {
-  double mcp = tract->params[VocalTract::MCP].x;
-  double mco = tract->params[VocalTract::MCO].x;
-  if (mcp <= 0.0 && mco <= 0.0) return;
+  double aesParam = tract->params[VocalTract::AES].x;
+  double mcoParam = tract->params[VocalTract::MCO].x;
+  if (aesParam <= 0.0 && mcoParam <= 0.0) return;
 
   const double END_MARGIN_CM = 0.5;
   const double AES_END_CM = 3.0;
@@ -152,14 +153,14 @@ void drawMedialCompressionOverlay(ImDrawList* dl, VocalTract* tract,
     Point2D P = tract->centerLine[i].point;
 
     double aes = 0.0;
-    if (mcp > 0.0 && pos > aesStart && pos < aesEnd) {
+    if (aesParam > 0.0 && pos > aesStart && pos < aesEnd) {
       double t = (pos - aesStart) / (aesEnd - aesStart);
-      aes = mcp * (0.5 - 0.5 * std::cos(t * 2.0 * M_PI));
+      aes = aesParam * (0.5 - 0.5 * std::cos(t * 2.0 * M_PI));
     }
     double oro = 0.0;
-    if (mco > 0.0 && pos > oroStart && pos < oroEnd) {
+    if (mcoParam > 0.0 && pos > oroStart && pos < oroEnd) {
       double t = (pos - oroStart) / (oroEnd - oroStart);
-      oro = mco * (0.5 - 0.5 * std::cos(t * 2.0 * M_PI));
+      oro = mcoParam * (0.5 - 0.5 * std::cos(t * 2.0 * M_PI));
     }
 
     double weight = aes > oro ? aes : oro;
