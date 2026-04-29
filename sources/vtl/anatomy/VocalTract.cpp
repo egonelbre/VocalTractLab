@@ -171,9 +171,9 @@ void VocalTract::init()
     "  <param index=\"16\" name=\"TS1\"  min=\"0.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"  
     "  <param index=\"17\" name=\"TS2\"  min=\"0.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n" 
     "  <param index=\"18\" name=\"TS3\"  min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
-    "  <param index=\"19\" name=\"AES\"  min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
+    "  <param index=\"19\" name=\"AES\"  min=\"-1.0\" max=\"0.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "  <param index=\"20\" name=\"PW\"   min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
-    "  <param index=\"21\" name=\"TT\"   min=\"0.0\"  max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
+    "  <param index=\"21\" name=\"TT\"   min=\"-1.0\" max=\"0.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "</anatomy>";
 
   // ****************************************************************
@@ -5683,13 +5683,14 @@ void VocalTract::calcCrossSections()
   // along the centerline. Both use the same signed convention:
   // negative = contraction, positive = expansion.
   //
-  //   AES — aryepiglottic-sphincter / epilaryngeal-tube width,
-  //         signed range -1..+1. AES = -1 is full contraction (the
-  //         defining gesture of twang); AES = +1 is full expansion
-  //         (relaxed / wide epilarynx). Acts on the first ~3 cm
+  //   AES — aryepiglottic-sphincter / epilaryngeal-tube contraction.
+  //         Range -1..0 (signed-negative-only; the AES doesn't have
+  //         a useful expansion direction beyond neutral). AES = -1
+  //         is full contraction (the defining gesture of twang),
+  //         AES = 0 is the resting state. Acts on the first ~3 cm
   //         above the glottis. MRI area reductions 11.8%–52.4%
-  //         (Yanagi); we map AES = ±1 to ±50% area at the centre
-  //         of the Hann window.
+  //         (Yanagi); we map AES = -1 to 50% area at the centre of
+  //         the Hann window.
   //   PW  — pharyngeal width, signed range -1..+1. Negative =
   //         hypopharyngeal narrowing (Edge / Kulning, constrictor
   //         engagement). Positive = stylopharyngeus dilation
@@ -5992,26 +5993,33 @@ void VocalTract::calcCrossSections()
 
   // ****************************************************************
   // Sub-block: ttEpiglottisTilt
-  // Thyroid forward tilt (TT, 0..1). Cricothyroid contraction tilts
-  // the thyroid cartilage forward, which mechanically pulls the
-  // epiglottis body backward toward the arytenoids. We model this
-  // as a rotation of the EPIGLOTTIS surface around its inferior
-  // anchor (rib 0, midline point) in the AP plane: the base stays
-  // fixed, the upper portion swings backward in -x. Independent of
-  // AES — Stage 2 separated the two so Belt (AES, no tilt) and
-  // Squillo (AES + tilt) can be represented distinctly.
+  // Thyroid forward tilt (TT, range -1..0). Cricothyroid contraction
+  // tilts the thyroid cartilage forward, which mechanically pulls
+  // the epiglottis body backward toward the arytenoids — narrowing
+  // the laryngeal vestibule. The sign convention matches AES / PW:
+  // negative = contraction, positive = expansion. TT only ranges in
+  // the contraction half because backward thyroid tilt isn't a
+  // meaningful singing gesture. TT = -1 is full forward tilt,
+  // TT = 0 is neutral.
   //
-  // 20° max angle at TT=1 corresponds roughly to the previous
+  // We model this as a rotation of the EPIGLOTTIS surface around
+  // its inferior anchor (rib 0, midline point) in the AP plane: the
+  // base stays fixed, the upper portion swings backward in -x.
+  // Independent of AES — Stage 2 separated the two so Belt (AES,
+  // no tilt) and Squillo (AES + tilt) can be represented distinctly.
+  //
+  // 20° max angle at TT = -1 corresponds roughly to the previous
   // uniform 5 mm shift of an ~1.5 cm tall epiglottis.
   // ****************************************************************
   {
-    double ttParam = params[TT].x;
-    if (ttParam < 0.0) ttParam = 0.0;
-    if (ttParam > 1.0) ttParam = 1.0;
-    if (ttParam > 0.0)
+    // Forward-tilt amount in [0, 1]: the negative half of TT.
+    double ttForward = -params[TT].x;
+    if (ttForward < 0.0) ttForward = 0.0;
+    if (ttForward > 1.0) ttForward = 1.0;
+    if (ttForward > 0.0)
     {
       const double MAX_TT_ANGLE_RAD = 20.0 * M_PI / 180.0;
-      double angle = MAX_TT_ANGLE_RAD * ttParam;
+      double angle = MAX_TT_ANGLE_RAD * ttForward;
       double cosA = cos(angle);
       double sinA = sin(angle);
 

@@ -154,11 +154,13 @@ void renderControlsPanel(AudioEngine& engine, FrameSnapshot& snap) {
     tractSlider(VocalTract::PW,  "Pharyngeal width (-narrow / +wide)");
 
     // Thyroid forward tilt — cricothyroid action. Tilts the upper
-    // epiglottis backward toward the arytenoids. Independent of AES;
-    // the Belt vs Squillo / Edge vs Opera distinction in pedagogy
-    // turns largely on this gesture.
+    // epiglottis backward toward the arytenoids (laryngeal-vestibule
+    // contraction). Independent of AES; the Belt vs Squillo / Edge
+    // vs Opera distinction in pedagogy turns largely on this
+    // gesture. Same sign convention as AES / PW: negative = forward
+    // tilt (contraction), 0 = neutral.
     ImGui::SeparatorText("Larynx posture");
-    tractSlider(VocalTract::TT, "Thyroid tilt");
+    tractSlider(VocalTract::TT, "Thyroid tilt (-forward / 0 neutral)");
 
     ImGui::PopItemWidth();
   }

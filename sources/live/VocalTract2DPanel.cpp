@@ -157,9 +157,19 @@ VoiceQualityInset computeVoiceQualityInset(const ImVec2& canvasMin,
     return L;
   }
   const float margin = 8.0f;
-  // Top-right corner: tongue-side lives at bottom-right.
-  L.rectMin = ImVec2(canvasMax.x - margin - w, canvasMin.y + margin);
-  L.rectMax = ImVec2(canvasMax.x - margin, canvasMin.y + margin + h);
+  // Stacked just above the tongue-side inset, both anchored to the
+  // bottom-right corner. The tongue-side inset uses the same height
+  // formula, so this stays in sync as the canvas resizes.
+  float tongueSideH = std::max(90.0f,
+                               (canvasMax.y - canvasMin.y) * 0.22f);
+  L.rectMax = ImVec2(canvasMax.x - margin,
+                     canvasMax.y - margin - tongueSideH - margin);
+  L.rectMin = ImVec2(L.rectMax.x - w, L.rectMax.y - h);
+  // If the canvas isn't tall enough to hold both insets without
+  // overlapping each other or running off the top, hide this one.
+  if (L.rectMin.y < canvasMin.y + margin) {
+    return VoiceQualityInset{};
+  }
   const float padX = 10.0f, padTop = 18.0f, padBot = 14.0f;
   L.plotMin = ImVec2(L.rectMin.x + padX, L.rectMin.y + padTop);
   L.plotMax = ImVec2(L.rectMax.x - padX, L.rectMax.y - padBot);
@@ -316,15 +326,16 @@ void drawMedialCompressionOverlay(ImDrawList* dl, VocalTract* tract,
     bool isExpansion;
     ImU32 col;
     if (aesAbs >= pwAbs) {
-      // AES region — colour is always amber; direction follows sign.
-      isExpansion = (aes > 0.0);
+      // AES region — only contraction is reachable (range [-1, 0]),
+      // so arrows always point inward. Warm amber.
+      isExpansion = false;
       col = IM_COL32(255, 170, 70, 230);
     } else if (pw < 0.0) {
-      // PW narrowing.
+      // PW narrowing — cyan, arrows inward.
       isExpansion = false;
       col = IM_COL32(70, 200, 230, 230);
     } else {
-      // PW widening.
+      // PW widening — mint green, arrows outward.
       isExpansion = true;
       col = IM_COL32(120, 220, 140, 230);
     }

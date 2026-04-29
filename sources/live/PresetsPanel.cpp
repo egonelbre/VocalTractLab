@@ -242,9 +242,12 @@ struct VoiceQualityPreset {
   const char* glottisShape;
 };
 
-// AES and PW are both signed: negative = contraction, positive =
-// expansion. Twang voice qualities use AES < 0 (epilarynx contracted)
-// + PW < 0 or PW > 0 depending on the genre's pharyngeal posture.
+// AES, TT, and PW all share the same convention: negative =
+// contraction, positive = expansion. AES and TT only have a
+// contraction half (range [-1, 0]); PW is fully signed [-1, +1].
+// Twang voice qualities use AES < 0 (epilarynx contracted) +
+// PW < 0 or PW > 0 depending on the genre's pharyngeal posture,
+// with TT < 0 adding the "ring" / squillo coloration.
 constexpr VoiceQualityPreset kVoiceQualityPresets[] = {
     // name,              tooltip,
     //                                                  AES   TT   PW   ΔHY   ΔJA   ΔLD   ΔTCY  ΔLP   glottis
@@ -253,17 +256,17 @@ constexpr VoiceQualityPreset kVoiceQualityPresets[] = {
     {"Necessary",         "CVT necessary twang — healthy AES baseline.",
                                                        -0.3,  0.0, -0.1,  0.0,  0.0,  0.00,  0.0,  0.0, "modal"},
     {"Distinct",          "CVT distinct twang — strong AES + tilt for ring.",
-                                                       -0.8,  0.5, -0.2,  0.4, -1.0,  0.15, -0.3,  0.0, "pressed"},
+                                                       -0.8, -0.5, -0.2,  0.4, -1.0,  0.15, -0.3,  0.0, "pressed"},
     {"Edge",              "CCM Edge / Belt — Aph≈154 mm², ratio 2.7.",
                                                        -0.7,  0.0, -0.4,  0.5, -2.0,  0.20, -0.3,  0.0, "pressed"},
     {"Kulning",           "Swedish herding call — Aph≈186 mm², ratio 2.9.",
-                                                       -0.6,  0.2, -0.3,  0.3, -2.0,  0.20, -0.2,  0.0, "pressed"},
+                                                       -0.6, -0.2, -0.3,  0.3, -2.0,  0.20, -0.2,  0.0, "pressed"},
     {"Squillo",           "Operatic squillo — Aph≈441 mm², ratio 4.6.",
-                                                       -0.5,  0.7,  0.7, -0.8, -3.0,  0.10, -0.1,  0.0, "modal"},
+                                                       -0.5, -0.7,  0.7, -0.8, -3.0,  0.10, -0.1,  0.0, "modal"},
     {"Soprano F1-tune",   "Sopranic F1 lift for high F0 (jaw drop + lip spread).",
-                                                       -0.3,  0.5,  0.5,  0.2, -5.0,  0.30, -0.5,  0.0, "modal"},
+                                                       -0.3, -0.5,  0.5,  0.2, -5.0,  0.30, -0.5,  0.0, "modal"},
     {"SOVTE",             "Semi-occluded posture (passive widening).",
-                                                        0.0,  0.2,  0.4, -0.2,  0.0,  0.00,  0.0,  0.0, "breathy"},
+                                                        0.0, -0.2,  0.4, -0.2,  0.0,  0.00,  0.0,  0.0, "breathy"},
 };
 constexpr int kNumVoiceQualityPresets =
     sizeof(kVoiceQualityPresets) / sizeof(kVoiceQualityPresets[0]);
