@@ -260,80 +260,115 @@ oral pathway as a parallel side-branch:
 - Velum tension: not exposed; the velum is treated as a rigid surface
   whose only state is its shape.
 
-### What "ideal" would look like
+### What the radiated lip output actually needs (Vampola 2020 update)
 
-Listed in rough increasing implementation cost. Stages 1–5 of the main
-plan don't touch any of this; this is parking-lot for a future
-nasal-modelling pass.
+Vampola, Horáček, Radolf, Švec & Laukkanen 2020 ran a CT-derived 3D
+FE model + 3D-printed physical model + in-vivo measurement on the
+same female subject for nasalised /a:/ and /i:/. Their conclusions
+collapse most of the nasal-pathway elaborations below into a single
+high-impact lever and demote the rest:
 
-1. **Velar tension parameter** (`VT`, 0..1). Maps to the loss factor
-   on the nasal coupling. At low tension, nasal-coupled modes have
-   wider bandwidths (mucosal absorption); at high tension, sharper.
-   No new geometry needed — just a damping multiplier on the nasal-
-   tube wall losses. Cheap.
-2. **Variable-area nasal cavity**. Replace the single uniform tube
-   with an area function from choanae (back of nose) to nostrils,
-   loaded from anatomy XML the same way the supraglottal tract is.
-   Captures the natural ~5:1 narrowing toward the nostrils and the
-   broader ethmoidal section in the middle. Moderate cost — extends
-   `Tube::initStaticSections` and adds a few anatomy fields.
-3. **Maxillary sinus side-branch**. A Helmholtz resonator (volume +
-   neck length + neck area) attached to the nasal cavity. Two
-   anatomy parameters (volume_cm3, ostium_area_cm2) per side. Adds
-   one zero pair to the transfer function. Validate against measured
-   nasal-vowel spectra. The piriform-fossa side-branch in `getTube`
-   is the implementation template.
-4. **Frontal & sphenoidal sinuses**. Same mechanism, smaller volumes.
-   Each adds another zero pair. Volumes are highly individual —
-   anatomy XML defaults + per-speaker overrides.
-5. **Ethmoid air cells**. Many tiny cavities, hard to model
-   discretely; a distributed damping term on the nasal cavity walls
-   covers it adequately.
-6. **Nostril radiation port**. Add a second radiation termination at
-   the nostrils with its own radiation impedance and directivity.
-   Mix into the output signal with a calibrated gain. Required for
-   realistic nasal vowels and for stops like /m/, /n/.
-7. **Paired (left + right) nasal cavities**. Adults have a deviated
-   septum and asymmetric turbinate cycles, producing audibly
-   different impedances per side. A two-channel nasal model would
-   capture this; rarely worth the cost in singing-voice synthesis.
-8. **Lateral / asymmetric VP port**. Replace the scalar `VO` with a
-   two-component port (central + lateral). Allows the
-   "trained-singer leak" gesture (small lateral coupling for
-   resonance enhancement without overt nasality). Requires changing
-   the coupling impedance from a single scalar to a two-port
-   network.
-9. **Uvular position as an independent gesture**. Useful for genres
-   with uvular contact (uvular trill, certain throat-singing styles).
-   Today the uvula moves with `VS`; could be split out as `UV`.
-10. **Dynamic velar timing**. In speech, velar transitions take
-    50–200 ms with detectable leak during transitions
-    (anticipatory / carry-over nasalisation). For sustained singing
-    less critical, but matters for diphthongs and consonant articulation.
-11. **Mucosal congestion modulator**. A single multiplier on
-    nasal-cavity area + wall losses captures sick-day voice. Easy
-    once (1) and (2) are in place.
-12. **Source-side velar elevation effect**. Velar elevation pulls
-    indirectly on the pharyngeal levator/superior-constrictor sling,
-    slightly tightening the pharynx. Tiny effect; not worth modelling
-    until everything above is in.
+- **With realistic wall damping (α = 0.02), every paranasal-sinus
+  inner-mode peak vanishes from the radiated lip spectrum.** The
+  combined audible effect of nasalisation at the lips reduces to
+  F1 –2.4 dB, F1 frequency +36 Hz, F3 frequency +83 Hz (their
+  Figs. 9 & 10). The 3D-printed physical model and the in-vivo
+  recording both show only **one** cumulative nasal feature below
+  F1, not the multiple sinus pairs that show up in the undamped
+  FE solver.
+- The maxillary-pair Helmholtz peaks (250/277 Hz) and sphenoid
+  pair (416/452 Hz) are the dominant *internal* nasal modes, but
+  Havel et al. 2017 (cited by the paper) show the sinuses **absorb
+  rather than amplify** sound under normal conditions.
+- The sinus modes do appear strongly at the **nostril** and as
+  **wall vibrations** — likely the physiological basis for the
+  singer's "facial mask" / "head resonance" sensation. Neither of
+  these contributes to the lip-radiated sound at typical listening
+  distance.
+
+So the minimum-viable nasal-modelling plan for a 1D area-function
+synth that wants better nasal vowels is much shorter than the
+original list:
+
+1. **Velar tension parameter** (`VT`, Task #12). Damping multiplier
+   on the nasal-tube wall losses. Vampola's results pin α ≈ 0.02
+   as the transition value where individual nasal modes become
+   inaudible at the lips — `VT` controls how much of the nasal
+   complexity reaches the radiated output. **Single highest-impact
+   change.**
+2. **Nostril radiation port** (Task #15). Second radiation
+   termination with its own impedance, mixed into the output with
+   a calibrated gain. Captures the audibility of nasal /m/, /n/
+   and any close-mic recordings where nostril output matters.
+   The current lip-only radiation never picks up the nostril modes
+   even when the VP port is wide open.
+3. **Lateral / asymmetric VP port** (Task #17). Two-component port
+   for the trained-singer "leak" gesture.
+
+### Items dropped from the parked plan
+
+The Vampola results show these have negligible impact at the lips
+and aren't worth the implementation cost for a 1D synth:
+
+- ~~**Variable-area nasal cavity**~~ (was Task #13). Once damping
+  is realistic, the nasal-cavity area function barely affects the
+  *radiated* spectrum. Geometry mostly matters for the wall-vibration
+  sensation that the area-function model can't represent anyway.
+- ~~**Maxillary sinus side-branch**~~ (was Task #14, *deleted*). With
+  realistic damping the maxillary Helmholtz contributes a notch of
+  only **~1–3 dB at ~260 Hz** at the lips — measurable on a spectrum
+  analyser, just-audible-to-inaudible in casual listening. The
+  3D-printed physical model and in-vivo recording both replace the
+  paired sinus peaks with a single broad cumulative dip below F1,
+  which the existing single-tube nasal coupling already approximates.
+- ~~**Frontal & sphenoidal sinus side-branches**~~ (was Task #16,
+  *deleted*). Even smaller contributions than the maxillary; the
+  paper's frontal-sinus modes (650 / 845 Hz for /a:/) are
+  effectively invisible at the lips after damping.
+
+### Other parked items that still make sense
+
+These don't affect the lip-output much either, but cost very little
+and unlock specific use cases:
+
+- **Uvular position as an independent gesture** (`UV` split off
+  from `VS`). For uvular trill, certain throat-singing styles.
+- **Dynamic velar timing**. Velar transitions 50–200 ms with leak
+  during transitions. Matters for diphthongs / consonant
+  articulation in speech, less for sustained singing.
+- **Mucosal congestion modulator**. Single multiplier on nasal-
+  cavity area + wall losses → sick-day voice. Trivial once `VT`
+  is in place.
+- **Wall-vibration / bone-conduction model**. Out of reach for an
+  area-function synth; would require a coupled mechanical-acoustic
+  solver. The paper itself flags this as the actually-interesting
+  role of the sinuses for singers' subjective experience.
+- **Source-side velar-elevation effect**. Velum drop pulls on the
+  levator/superior-constrictor sling, tightening the pharynx
+  slightly. Tiny.
 
 ### Velum gaps in the gap table
 
-| Mismatch | What the literature says | Current code | Severity |
+Severity column re-evaluated against Vampola 2020 — what actually
+shows up at the radiated lip output vs what only matters at the
+nostril or in wall vibrations.
+
+| Mismatch | What the literature says | Current code | Severity at the lips |
 |---|---|---|---|
-| Nasal cavity is a uniform tube | Real cavity has 3–5× area variation choanae→nostril | Single section in `Tube::initStaticSections` | Med |
-| No paranasal sinuses | Maxillary sinus zero ~150–400 Hz is the dominant nasal anti-resonance | No side-branch on the nasal tube | Med |
-| No nostril radiation | Nasal /m/, /n/ radiate from nostrils | Lip-only radiation | Med |
-| Velar tension fixed | Affects nasal-coupled mode bandwidth | Anatomy XML constant | Low |
+| Velar tension fixed | Wall damping α determines whether nasal modes are audible at all | Anatomy XML constant | **High** — controls F1 bandwidth + whether sinus features reach the lips |
+| No nostril radiation | Nasal /m/, /n/ radiate from nostrils; close-mic recordings need it | Lip-only radiation | Med |
 | Single VP port area | Real port has central + lateral components | Single scalar `VO` | Low |
+| Nasal cavity is a uniform tube | Real cavity has area variation but radiated spectrum is dominated by F1 coupling, not internal nasal-tube shape | Single section in `Tube::initStaticSections` | **Low** (was Med — Vampola shows damped inner-tube modes don't reach the lips) |
+| No paranasal sinuses | Maxillary / sphenoid pairs visible at nostril, ≤2 dB notch at lips | No side-branch on the nasal tube | **Low** (was Med — Vampola: realistic damping erases sinus peaks at lips) |
 | Uvula not independent | Some genres need it | Coupled to `VS` | Low |
 | Oral / Nasal twang preset binding | PDF makes this the primary twang dichotomy | `VS`/`VO` are independent of `MCP` | **Cosmetic / preset-only fix** |
 
-The last row is the one that's actually addressed by Stage 5 of the
-main plan (the Oral-twang vs Nasal-twang presets simply write
-different `VS`/`VO` values together with the AES atom). All the others
-are parked.
+The last row is the one already addressed by Stage 5 of the main
+plan (the Oral-twang vs Nasal-twang presets simply write different
+`VS`/`VO` values together with the AES atom). The "High" severity
+row (`VT` velar tension / wall damping) is the highest-leverage of
+the parked items and is the primary reason the sinus side-branch
+work is no longer worth doing.
 
 ## Where the current implementation falls short
 
@@ -779,12 +814,16 @@ Stage 3 task description, not a separate stage:
 ### Stage 6 — *Parked / future*
 
 - **Velum & nasal pathway** — see "Background: velum & nasal coupling"
-  above. Twelve sub-items, ranked by cost. The top three (velar
-  tension parameter, variable-area nasal cavity, maxillary sinus
-  side-branch) are the highest-value if a nasal-modelling pass is
-  attempted; nostril radiation closes the loop. None of this is
-  required for stages 1–5 — the Oral / Nasal twang presets bind the
-  existing `VS` / `VO` and that's enough for first cut.
+  above. After the Vampola 2020 re-evaluation, the minimum-viable
+  list collapses to three items: velar tension `VT` (highest impact —
+  controls whether sinus modes reach the lips at all), nostril
+  radiation port, and lateral / asymmetric VP port. Sinus side-
+  branches (maxillary, frontal, sphenoidal) and variable-area nasal
+  cavity are dropped: with realistic wall damping their effect at
+  the radiated lip output is ≤2 dB and just-audible-to-inaudible.
+  None of this is required for stages 1–5 — the Oral / Nasal twang
+  presets bind the existing `VS` / `VO` and that's enough for first
+  cut.
 - **Wall compliance / SOVTE.** Per-section dynamic state:
   ΔA_i ≈ C_w · A_i · P_supra(i), with C_w ≈ 6 × 10⁻⁵ cm³/dyn (Ohala &
   Riordan). Requires coupling supraglottal pressure back into the area
@@ -892,6 +931,21 @@ Stage 3 task description, not a separate stage:
 
 ### Velum, velopharyngeal port, nasal coupling
 
+- Vampola, T., Horáček, J., Radolf, V., Švec, J. G., & Laukkanen, A.-M.
+  (2020). *Influence of nasal cavities on voice quality: Computer
+  simulations and experiments.* JASA 148(5):3218. The reference that
+  drives the doc's minimum-viable nasal plan: realistic wall damping
+  α ≈ 0.02 erases all internal nasal/sinus mode peaks from the
+  radiated lip spectrum, leaving only F1 amplitude (–2.4 dB),
+  frequency (+36 Hz), and bandwidth changes. PubMed:
+  <https://pubmed.ncbi.nlm.nih.gov/33261400/> · PDF:
+  <https://pubs.aip.org/asa/jasa/article-pdf/148/5/3218/15346495/3218_1_online.pdf>
+- Havel, M., Kornes, T., Weitzberg, E., Lundberg J. O., & Sundberg,
+  J. (2016). *Eliminating paranasal sinus resonance and its effects
+  on acoustic properties of the nasal tract.* Logopedics Phoniatrics
+  Vocology 41(1):33. Maxillary and sphenoid sinuses absorb rather
+  than amplify under normal conditions — context for why dedicated
+  side-branch modelling buys little at the radiated output.
 - Pruthi, T., & Espy-Wilson, C. Y. (2007). *Acoustic parameters for the
   automatic detection of nasalization in vowels.* JASA / INTERSPEECH:
   <https://www.isca-archive.org/interspeech_2007/pruthi07b_interspeech.pdf>
