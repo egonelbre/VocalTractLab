@@ -641,6 +641,28 @@ implementation table in `PresetsPanel.cpp` (mainly
 `RELATIVE_AMPLITUDE`, `LOWER_END_X`, `UPPER_END_X`, `PHASE_LAG`,
 `PULSE_SHAPE`).
 
+**Calibration targets from Fleischer 2022** (single Estill-certified
+female subject, three pitches, two vowels — direct match to our
+preset list). Acceptance test for the Stage 5 presets: with each
+voice-quality preset selected on the JD2 speaker at A♭4 / /a:/, the
+synthesised vocal tract should produce roughly:
+
+| Preset | L (cm) | OP/HP ratio | Ic (EGG) | Notes |
+|---|---:|---:|---:|---|
+| Belting | 11.5 | 7.6 | ~0.5 | strong megaphone, 2fo-fR1 tuning |
+| Twang | 12.2 | 6.8 | ~0.35 | megaphone, weaker than Belting |
+| Speech (Neutral) | 12.0 | 4.4 | ~0.5 | mild megaphone, no formant tuning |
+| Falsetto | 12.7 | 2.6 | ~0.2 | nearly neutral, abducted folds |
+| Sobbing | 15.3 | 1.2 | ~0.5 | inverted-megaphone |
+| Opera (Squillo) | 16.6 | 1.4 | ~0.5 | inverted-megaphone, fo-fR1 tuning |
+
+These are guideline targets for tuning the per-preset deltas in
+`PresetsPanel.cpp`, not strict acceptance gates — the synth's
+geometry differs from the subject's anatomy, so absolute lengths
+won't match exactly, but the *ordering* of preset lengths and OP/HP
+ratios should hold. Validate qualitatively: Squillo should produce
+the longest tract and lowest OP/HP, Belting the shortest and highest.
+
 **Title:** rename the panel window from "Tract Shapes" to "Presets"
 to reflect the broader scope. Keep the function name
 `renderTractShapesPanel` — internal callsites don't need to churn.
@@ -829,11 +851,31 @@ Stage 3 task description, not a separate stage:
   Riordan). Requires coupling supraglottal pressure back into the area
   function — non-trivial inside the TDS solver; design a separate
   experiment.
-- **Source-filter coupling for Pth feedback.** Per Titze 1997, Pth
-  drops sharply when Aₑ < ~1.0 cm². Modelling this needs supraglottal
-  inertive reactance fed back to the Glottis driving pressure. Out of
-  scope for the area-function refactor — the only way to capture the
-  +10–15 dB "free gain" of twang therapy in simulation.
+- **Source-filter coupling for Pth feedback.** Per Titze & Story
+  1997, Pth drops sharply when Aₑ < ~1.0 cm² (parabolic curve, their
+  Fig. 11 — flat above 1.0, steep below). Modelling this needs
+  supraglottal inertive reactance fed back to the Glottis driving
+  pressure. Out of scope for the area-function refactor — the only
+  way to capture the +10–15 dB "free gain" of twang therapy in
+  simulation, and the cleanest path to representing the 2fo–fR1 and
+  fo–fR1 formant-tuning behaviours that Fleischer 2022 measured in
+  Belting and Opera respectively.
+- **Vallecula side-branch.** Side-branch off the centerline at the
+  base of the tongue, between the tongue root and the epiglottis.
+  Vampola 2015 and Fleischer 2022 both find that vallecular volume
+  produces antiresonances around 4 kHz that *repel* F3–F5 — large
+  vallecula (Sobbing, Opera) suppresses the singer's-formant
+  cluster; small vallecula (Belting, Twang — tongue root retracts
+  and epiglottis depresses, truncating the space) lets the cluster
+  bunch up. Implementation pattern: same as the existing piriform-
+  fossa side-branch in `getTube` (`VocalTract.cpp:7662–7683`) —
+  Helmholtz / quarter-wave resonator with a volume_cm3 +
+  ostium_area_cm2 anatomy parameter, length tied to the existing
+  centerline geometry. The vallecular volume should shrink with
+  tongue-root retraction (linkable to PW < 0 and to TRX, since
+  Stage 3 already pushes the tongue root backward). Cheap relative
+  to its acoustic effect — this is one of the few side-branches
+  the literature consistently flags as audible at the lips.
 - ~~**Pitch-aware AES factor.**~~ *Considered and rejected.* Yanagi
   observes 50% AES area reduction at low pitch vs 21% at high pitch,
   attributed to the cricothyroid stretch tensing the aryepiglottic
@@ -864,9 +906,25 @@ Stage 3 task description, not a separate stage:
   Vocal Modes Using Magnetic Resonance Imaging.* PubMed:
   <https://pubmed.ncbi.nlm.nih.gov/32111459/> · author copy:
   <https://singandscream.fr/wp-content/uploads/2025/02/Leppavuori_JVoice_2020.pdf>
-- Titze, I. R. (1997). *Acoustic interactions of the voice source with
-  the lower vocal tract.* JASA 101(4):2234.
+- Titze, I. R., & Story, B. H. (1997). *Acoustic interactions of the
+  voice source with the lower vocal tract.* JASA 101(4):2234. The
+  canonical reference for source-filter coupling: parabolic Pth vs
+  Aₑ curve, 6:1 area-ratio target for singer's formant, narrow
+  epilarynx + wide pharynx maintains positive inertive reactance
+  below ~3 kHz, piriform-fossa pole-zero behaviour, no measurable
+  effect of nasal coupling on Pth.
   <https://pubs.aip.org/asa/jasa/article-pdf/101/4/2234/8082279/2234_1_online.pdf>
+- Fleischer, M., Rummel, S., Stritt, F., Fischer, J., Bock, M.,
+  Echternach, M., Richter, B., & Traser, L. (2022). *Voice
+  efficiency for different voice qualities combining experimentally
+  derived sound signals and numerical modeling of the vocal tract.*
+  Frontiers in Physiology 13:1081622. Single-subject MRI + FE +
+  EGG study of all six Estill voice qualities (Speech, Falsetto,
+  Sobbing, Oral Twang, Opera, Belting). Provides concrete L /
+  OP/HP / Ic targets per voice quality used as Stage 5 calibration
+  guidance, and corroborates Vampola's wall-damping value (μ ≈
+  0.005). Open access:
+  <https://www.frontiersin.org/articles/10.3389/fphys.2022.1081622/full>
 - Titze, I. R. *The Acoustic Characteristics of Vocal Twang.* Utah Center
   for Vocology.
   <https://vocology.utah.edu/_resources/documents/the_acoustic_characteristics_of_vocal_twang_titze.pdf>
