@@ -46,7 +46,7 @@ quality.
 
 | # | Gesture | Muscles / mechanism | Acoustic primary effect | Current param |
 |---|---|---|---|---|
-| 1 | AES sphincter contraction | Oblique interarytenoids + aryepiglottic m. | Narrows ET → epilarynx as quarter-wave resonator (~3 kHz cluster) | `MCP` (conflated) |
+| 1 | AES sphincter (contraction ↔ dilation) | Contraction: oblique interarytenoids + aryepiglottic m.; Dilation: thyroepiglottic + posterior cricoarytenoid + stylopharyngeus | Narrows ET → epilarynx as quarter-wave resonator (~3 kHz cluster); widens ET → wide-AES qualities (Sobbing, Falsetto, Speech) | `MCP` (conflated) |
 | 2 | Thyroid forward tilt | Cricothyroid (CT) | Stretches folds (F0); secondary epiglottis depression | — *missing* |
 | 3 | Pharyngeal width (signed) | Stylopharyngeus + palatopharyngeus (dilate) ↔ sup./mid./inf. constrictors (narrow) | Hypopharyngeal volume; F1; ratio for singer's-formant cluster | `MCO` (only narrows; no widen) |
 | 4 | Larynx vertical position | Supra- vs infrahyoid strap m. | Tract length → all formants scale | `HY` ✓ |
@@ -393,22 +393,65 @@ work is no longer worth doing.
 Replace `MCP`/`MCO` with three orthogonal atoms. Keep all other params
 unchanged. Presets sit on top as a UI layer; they don't add state.
 
-### `AES` — sphincter contraction (range 0..1)
+### `AES` — aryepiglottic-sphincter width (signed range -1..+1)
 
-Drives, and only drives:
+The aryepiglottic sphincter is bidirectional: distinct muscle groups
+actively contract it (oblique interarytenoid + aryepiglottic
+muscles) and actively dilate it (thyroepiglottic + posterior
+cricoarytenoid + stylopharyngeus). Estill Voice Training reflects
+this with explicit "narrow AES" (Twang, Opera, Belting) and
+"wide AES" (Speech, Falsetto, Sobbing) classifications.
 
-- AES centre-line area target. Multiplicative factor + absolute clamp
-  toward ~0.20 cm² when AES = 1.
-- AP narrowing of the **arytenoid**-region posterior wall.
-- AP narrowing of the **epiglottic petiole**-region anterior wall.
-- ML pinch *only* within the AES Hann window (0.5–3.0 cm above glottis).
-- Piriform fossa volume reduction (passive coupling, kept).
+**Sign convention** (matches PW): negative = contraction, 0 =
+neutral / resting, positive = active dilation.
 
-Nothing above the aryepiglottic folds. Nothing on the tongue. Nothing on
-the larynx height.
+- **AES < 0 — contraction.** Oblique interarytenoid + aryepiglottic
+  muscles draw arytenoids and epiglottic petiole together, with the
+  thyroid tilting forward (often co-contracted as a bundle, but the
+  TT param owns that). Drives:
+  - AES centre-line area target. Multiplicative factor + absolute
+    clamp toward ~0.20 cm² at AES = -1.
+  - AP narrowing of the **arytenoid**-region posterior wall.
+  - AP narrowing of the **epiglottic petiole**-region anterior wall.
+  - ML pinch *only* within the AES Hann window (0.5–3.0 cm above
+    glottis).
+  - Piriform fossa volume reduction (passive coupling, contraction-
+    only — the piriform doesn't expand under dilation).
+- **AES > 0 — active dilation.** Driven by:
+  - **Thyroepiglottic** muscle (thyroid → epiglottis): pulls the
+    epiglottis *forward* toward the tongue base, the opposite AP
+    direction from TT contraction. Modelled as a translation of the
+    EPIGLOTTIS surface in **+x**.
+  - **Posterior cricoarytenoid (PCA)**: pulls the arytenoids
+    posteriorly and laterally. Modelled as a -x shift of the
+    posterior larynx wall (UPPER_COVER ribs in the larynx range),
+    soft-clamped against `getPharynxBackX(v.y) − margin` so the
+    wall doesn't pass through the spine.
+  - **Stylopharyngeus** lateral pull on the surrounding pharynx —
+    overlaps with what `PW > 0` already models. AES > 0 contributes
+    only the local ML expansion within its own Hann window.
+  - Acoustic: area scaling > 1.0 inside the AES window (max factor
+    ~1.5 at AES = +1).
 
-Optional pitch-aware scaling: full strength at ≤B2 / ~123 Hz, reduced to
-~40 % at G4 / ~392 Hz, to track the volumetric data.
+**PCA + abducted-folds coupling.** PCA is the abductor of the vocal
+folds — the same muscle that opens the glottis for breathing. So
+"AES dilation" is physiologically bundled with breathy / abducted
+phonation in real singers. The Stage 5 voice-quality presets reflect
+this: Falsetto (EVT "wide AES + stiff abducted folds") and Sobbing
+(EVT "wide AES + thin folds") use AES > 0 paired with a more
+breathy / abducted Glottis shape; the AES handle alone doesn't
+auto-write Glottis state, but the preset bundles them.
+
+**Visual deformation symmetry.** The dilation deformations are *not*
+the contraction deformations with sign flipped — they're separate,
+anatomically distinct gestures (epiglottis +x is a thyroepiglottic
+gesture, not the opposite of TT-driven backward tilt). Implementing
+AES > 0 as inverted contraction is what produced the visual
+artefact during the Stage 3 review, where surfaces moved through
+each other unrealistically.
+
+Nothing above the aryepiglottic folds. Nothing on the tongue.
+Nothing on the larynx height.
 
 ### `TT` — thyroid forward tilt (range 0..1, *new*)
 
@@ -568,6 +611,53 @@ through stage 1.
   possible.
 - Tests: at PW = +1 across the full vowel space, no surface penetrates
   another (visual + invariant).
+
+### Stage 4b — Restore AES bidirectionality with dilation deformations
+
+Stage 3 originally made AES signed `[-1, +1]`, but a review session
+flagged the AES > 0 visual as wrong because the dilation deformations
+were just inverted-contraction. The fix at the time was to clamp AES
+to `[-1, 0]`. Stage 4b reopens the bidirectional range with
+anatomically distinct dilation gestures (per the muscle list in the
+"`AES`" section of the proposed control surface above).
+
+- Restore `AES` slider range to `[-1, +1]` in:
+  - `VocalTract.cpp` static defaults blob (max back to 1.0).
+  - The three bundled speaker files (max back to 1.000).
+- In `calcCrossSections`, split the `aesContraction` block into:
+  - `aesContraction` — runs when `params[AES].x < 0`. Existing logic
+    unchanged.
+  - `aesDilation` — runs when `params[AES].x > 0`:
+    - EPIGLOTTIS surface translates in **+x** (thyroepiglottic
+      forward pull). Magnitude scaled by `aesDilation` strength,
+      max ~0.4 cm at AES = +1. Mirror onto EPIGLOTTIS_TWOSIDE.
+    - Posterior larynx wall (UPPER_COVER ribs in the larynx range)
+      translates in **−x**, soft-clamped against
+      `getPharynxBackX(v.y) − margin` so it doesn't pass through
+      the spine. Same clamp pattern as PW > 0 in Stage 4.
+    - ML expansion within the AES Hann window (z-scale > 1, max
+      ~1.4 at AES = +1).
+    - Centerline area scaling > 1.0 (max factor ~1.5 at AES = +1).
+- Update the 2D overlay (`VocalTract2DPanel.cpp:128–175`) to handle
+  positive AES: outward arrows (warm amber) for AES > 0, inward
+  arrows (warm amber) for AES < 0 — mirrors the existing PW
+  signed colour scheme.
+- Re-enable the dilation half of the inset handle (`VQ_PARAM_IDX`
+  in `VocalTract2DPanel.cpp`): AES handle becomes signed-symmetric
+  like PW.
+- Update the voice-quality preset table in `PresetsPanel.cpp` for
+  the EVT "wide AES" qualities: Speech, Falsetto, Sobbing should
+  pair AES > 0 with appropriately abducted-fold Glottis params
+  (especially Falsetto — "stiff abducted" → higher chink area,
+  more breathy spectrum). Specific preset values:
+  - Falsetto: AES = +0.5 (mild dilation), abducted glottis shape.
+  - Sobbing: AES = +0.3, breathy glottis shape.
+  - Speech (Neutral): AES = 0 unchanged.
+- Tests: at AES = 0 the synth output is bit-exact to current
+  Stage 4 output (regression test fixtures all have AES = 0). At
+  AES = +1 the 2D outline visibly widens at the epilarynx without
+  surface penetration; the EPIGLOTTIS moves forward, the posterior
+  larynx wall recedes (clamped at the spine).
 
 ### Stage 5 — Voice-quality presets in the Presets panel
 
