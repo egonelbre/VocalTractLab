@@ -243,11 +243,12 @@ struct VoiceQualityPreset {
 };
 
 // AES, TT, and PW all share the same convention: negative =
-// contraction, positive = expansion. AES and TT only have a
-// contraction half (range [-1, 0]); PW is fully signed [-1, +1].
-// Twang voice qualities use AES < 0 (epilarynx contracted) +
-// PW < 0 or PW > 0 depending on the genre's pharyngeal posture,
-// with TT < 0 adding the "ring" / squillo coloration.
+// contraction, positive = expansion. AES is fully signed [-1, +1]
+// (active dilation via thyroepiglottic + PCA + stylopharyngeus).
+// TT only has a contraction half (range [-1, 0]); PW is fully
+// signed [-1, +1]. Twang voice qualities use AES < 0 (epilarynx
+// contracted); EVT "wide AES" qualities (Falsetto, Sobbing, SOVTE)
+// use AES > 0 paired with breathier / abducted glottis shapes.
 constexpr VoiceQualityPreset kVoiceQualityPresets[] = {
     // name,              tooltip,
     //                                                  AES   TT   PW   ΔHY   ΔJA   ΔLD   ΔTCY  ΔLP   glottis
@@ -267,6 +268,10 @@ constexpr VoiceQualityPreset kVoiceQualityPresets[] = {
                                                        -0.3, -0.5,  0.5,  0.2, -5.0,  0.30, -0.5,  0.0, "modal"},
     {"SOVTE",             "Semi-occluded posture (passive widening).",
                                                         0.0, -0.2,  0.4, -0.2,  0.0,  0.00,  0.0,  0.0, "breathy"},
+    {"Falsetto",          "EVT wide-AES + abducted folds (light register).",
+                                                        0.5,  0.0,  0.2,  0.2,  0.0,  0.00,  0.0,  0.0, "breathy"},
+    {"Sobbing",           "EVT wide-AES + thin breathy folds.",
+                                                        0.3,  0.0,  0.1,  0.0,  0.0,  0.00,  0.0,  0.0, "breathy"},
 };
 constexpr int kNumVoiceQualityPresets =
     sizeof(kVoiceQualityPresets) / sizeof(kVoiceQualityPresets[0]);

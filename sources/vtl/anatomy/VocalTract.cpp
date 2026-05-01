@@ -171,7 +171,7 @@ void VocalTract::init()
     "  <param index=\"16\" name=\"TS1\"  min=\"0.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"  
     "  <param index=\"17\" name=\"TS2\"  min=\"0.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n" 
     "  <param index=\"18\" name=\"TS3\"  min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
-    "  <param index=\"19\" name=\"AES\"  min=\"-1.0\" max=\"0.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
+    "  <param index=\"19\" name=\"AES\"  min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "  <param index=\"20\" name=\"PW\"   min=\"-1.0\" max=\"1.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "  <param index=\"21\" name=\"TT\"   min=\"-1.0\" max=\"0.0\"  neutral=\"0.0\"   positive_velocity_factor=\"1.0\"   negative_velocity_factor=\"1.0\"/>\n"
     "</anatomy>";
@@ -5683,14 +5683,21 @@ void VocalTract::calcCrossSections()
   // along the centerline. Both use the same signed convention:
   // negative = contraction, positive = expansion.
   //
-  //   AES — aryepiglottic-sphincter / epilaryngeal-tube contraction.
-  //         Range -1..0 (signed-negative-only; the AES doesn't have
-  //         a useful expansion direction beyond neutral). AES = -1
-  //         is full contraction (the defining gesture of twang),
-  //         AES = 0 is the resting state. Acts on the first ~3 cm
-  //         above the glottis. MRI area reductions 11.8%–52.4%
-  //         (Yanagi); we map AES = -1 to 50% area at the centre of
-  //         the Hann window.
+  //   AES — aryepiglottic-sphincter / epilaryngeal-tube width.
+  //         Signed range -1..+1. AES = -1 is full contraction (the
+  //         defining gesture of twang; oblique interarytenoid +
+  //         aryepiglottic m.); AES = +1 is full active dilation
+  //         (thyroepiglottic forward pull on the epiglottis +
+  //         posterior cricoarytenoid pulling the posterior larynx
+  //         wall back + stylopharyngeus widening the vestibule);
+  //         AES = 0 is resting. Acts on the first ~3 cm above the
+  //         glottis. MRI area reductions 11.8%–52.4% (Yanagi); we
+  //         map AES = -1 to 50% area and AES = +1 to 150% area at
+  //         the centre of the Hann window. The dilation deformations
+  //         (epiglottis +x, posterior larynx wall -x) live in a
+  //         separate aesDilation sub-block below the contraction
+  //         logic — those are anatomically distinct gestures, not
+  //         inverted contraction.
   //   PW  — pharyngeal width, signed range -1..+1. Negative =
   //         hypopharyngeal narrowing (Edge / Kulning, constrictor
   //         engagement). Positive = stylopharyngeus dilation
@@ -5985,6 +5992,89 @@ void VocalTract::calcCrossSections()
               P.z = -P.z;
               ucTw->setVertex(ri, ucTw->numRibPoints - 1 - k, P);
             }
+          }
+        }
+      }
+    }
+
+    // ============================================================
+    // Sub-block: aesDilation
+    //
+    // Active widening of the epilaryngeal tube — anatomically
+    // distinct from "less contraction". Three muscle actions
+    // contribute: thyroepiglottic m. pulls the epiglottis forward
+    // (+x, away from the posterior wall), posterior cricoarytenoid
+    // (PCA) pulls the arytenoid cartilages back (-x on the
+    // posterior larynx wall), and stylopharyngeus widens the
+    // vestibule laterally (already covered by ML scaling > 1 in
+    // applyMLScaling above). The centerline area scaling > 1.0 is
+    // also already covered by regionFactor / aesArea above.
+    //
+    // What this sub-block adds is the AP separation: epiglottis
+    // forward + posterior wall back, so the 2D mediosagittal view
+    // shows a true widening of the epilaryngeal tube rather than
+    // just an inverted contraction. Without this the AES > 0 visual
+    // would either look identical to AES = 0 (because ML scaling is
+    // invisible in the z=0 slice) or look wrong (epiglottis pulling
+    // forward through the posterior wall as a single rigid shift).
+    //
+    // The posterior larynx wall recede is soft-clamped against
+    // getPharynxBackX(v.y) so the vertex doesn't pass through the
+    // cervical spine — same pattern as PW > 0 in the pharynx.
+    // ============================================================
+    if (aesParam > 0.0)
+    {
+      double aesDilation = aesParam;
+      if (aesDilation > 1.0) aesDilation = 1.0;
+
+      const double MAX_EPIGLOTTIS_FWD_CM = 0.4;
+      const double MAX_LARYNX_BACK_RECEDE_CM = 0.4;
+
+      double epiFwd = MAX_EPIGLOTTIS_FWD_CM * aesDilation;
+      Surface* eg = &surfaces[EPIGLOTTIS];
+      for (int ri = 0; ri < eg->numRibs; ri++)
+      {
+        for (int k = 0; k < eg->numRibPoints; k++)
+        {
+          Point3D v = eg->getVertex(ri, k);
+          eg->setVertex(ri, k, v.x + epiFwd, v.y, v.z);
+        }
+      }
+      Surface* egTw = &surfaces[EPIGLOTTIS_TWOSIDE];
+      for (int ri = 0; ri < egTw->numRibs; ri++)
+      {
+        for (int k = 0; k < eg->numRibPoints; k++)
+        {
+          Point3D P = eg->getVertex(ri, k);
+          egTw->setVertex(ri, k, P);
+          P.z = -P.z;
+          egTw->setVertex(ri, egTw->numRibPoints - 1 - k, P);
+        }
+      }
+
+      double larynxBack = MAX_LARYNX_BACK_RECEDE_CM * aesDilation;
+      Surface* uc = &surfaces[UPPER_COVER];
+      Surface* ucTw = &surfaces[UPPER_COVER_TWOSIDE];
+      int ribEnd = NUM_LARYNX_RIBS - 1;
+      if (ribEnd >= uc->numRibs) ribEnd = uc->numRibs - 1;
+      for (int ri = 0; ri <= ribEnd; ri++)
+      {
+        for (int k = 0; k < uc->numRibPoints; k++)
+        {
+          Point3D v = uc->getVertex(ri, k);
+          double newX = v.x - larynxBack;
+          double minX = getPharynxBackX(v.y);
+          if (newX < minX) newX = minX;
+          uc->setVertex(ri, k, newX, v.y, v.z);
+        }
+        if (ucTw != nullptr)
+        {
+          for (int k = 0; k < uc->numRibPoints; k++)
+          {
+            Point3D P = uc->getVertex(ri, k);
+            ucTw->setVertex(ri, k, P);
+            P.z = -P.z;
+            ucTw->setVertex(ri, ucTw->numRibPoints - 1 - k, P);
           }
         }
       }

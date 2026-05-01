@@ -268,6 +268,8 @@ void drawSmallArrow(ImDrawList* dl, ImVec2 from, ImVec2 to, ImU32 col,
 // Region colours stay distinct so it's still obvious which gesture
 // is acting:
 //   AES (warm amber): epilarynx, ~0.5 to 3.0 cm above the glottis.
+//     Inward = sphincter contraction; outward = active dilation
+//     (thyroepiglottic + PCA + stylopharyngeus).
 //   PW contraction (cyan), PW expansion (mint green).
 // Arrow length scales with local intensity (Hann-weighted parameter
 // magnitude). Sparse sampling keeps the overlay readable.
@@ -326,9 +328,11 @@ void drawMedialCompressionOverlay(ImDrawList* dl, VocalTract* tract,
     bool isExpansion;
     ImU32 col;
     if (aesAbs >= pwAbs) {
-      // AES region — only contraction is reachable (range [-1, 0]),
-      // so arrows always point inward. Warm amber.
-      isExpansion = false;
+      // AES region — warm amber; sign of the local windowed value
+      // picks direction. AES < 0 = sphincter contraction (inward),
+      // AES > 0 = active dilation (outward — thyroepiglottic
+      // forward pull + PCA + stylopharyngeus).
+      isExpansion = (aes > 0.0);
       col = IM_COL32(255, 170, 70, 230);
     } else if (pw < 0.0) {
       // PW narrowing — cyan, arrows inward.
